@@ -1,0 +1,72 @@
+# ==============================================================================
+# LeNote - Android Project .gitignore
+# ==============================================================================
+
+# Built application files and binaries
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Gradle build directories & caches
+.gradle/
+build/
+**/build/
+bin/
+out/
+
+# Kotlin compiler daemon & cache
+.kotlin/
+*.kotlin_module
+
+# Local SDK & environment configuration
+local.properties
+local.properties.*
+
+# Android Studio / IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Signing keys and keystores (never commit credentials/certificates)
+*.jks
+*.keystore
+*.key
+*.p12
+*.pepk
+
+# Native C/C++ build directories
+.externalNativeBuild/
+.cxx/
+
+# Profiling, memory dumps & log files
+*.log
+*.hprof
+/captures/
+*.stackdump
+
+# Jetpack Compose compiler metrics & reports
+compose_compiler/
+**/compose_compiler/
+
+# Android Lint reports
+lint-results/
+lint-reports/
+
+# Operating System specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Backup and editor temporary files
+*.bak
+*.swp
+*~
+*.tmp
