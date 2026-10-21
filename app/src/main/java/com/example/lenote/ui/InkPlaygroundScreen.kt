@@ -207,6 +207,7 @@ fun InkPlaygroundScreen(
     var showRenamePageDialog by remember { mutableStateOf(false) }
     var renamePageInput by remember { mutableStateOf("") }
     var showSheetOptionsModal by remember { mutableStateOf(false) }
+    var showTemplatePickerDialog by remember { mutableStateOf(false) }
     var showPageActionsModal by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showDeletePageConfirmDialog by remember { mutableStateOf(false) }
@@ -578,7 +579,7 @@ fun InkPlaygroundScreen(
             },
             onOpenSheetOptions = {
                 showPageActionsModal = false
-                showSheetOptionsModal = true
+                showTemplatePickerDialog = true
             },
             onExportPdf = {
                 showPageActionsModal = false
@@ -2311,85 +2312,7 @@ private fun PageBackgroundThumbnail(
                 color = Color(0xFFFCFCFA),
                 border = BorderStroke(1.dp, Color(0xFFE2E8F0))
             ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val lineColor = Color(0xFF94A3B8)
-                    when (bg) {
-                        PageBackground.BLANK -> {
-                            // Folha branca limpa
-                        }
-                        PageBackground.RULED -> {
-                            val spacing = size.height / 4f
-                            for (i in 1..3) {
-                                val y = i * spacing
-                                drawLine(
-                                    color = lineColor.copy(alpha = 0.6f),
-                                    start = Offset(3f, y),
-                                    end = Offset(size.width - 3f, y),
-                                    strokeWidth = 0.8f
-                                )
-                            }
-                        }
-                        PageBackground.GRID -> {
-                            val spacingX = size.width / 5f
-                            val spacingY = size.height / 3.5f
-                            for (i in 1 until 5) {
-                                val x = i * spacingX
-                                drawLine(
-                                    color = lineColor.copy(alpha = 0.4f),
-                                    start = Offset(x, 2f),
-                                    end = Offset(x, size.height - 2f),
-                                    strokeWidth = 0.7f
-                                )
-                            }
-                            for (i in 1 until 3) {
-                                val y = i * spacingY
-                                drawLine(
-                                    color = lineColor.copy(alpha = 0.4f),
-                                    start = Offset(2f, y),
-                                    end = Offset(size.width - 2f, y),
-                                    strokeWidth = 0.7f
-                                )
-                            }
-                        }
-                        PageBackground.DOTS -> {
-                            val spacingX = size.width / 4.5f
-                            val spacingY = size.height / 3.5f
-                            for (i in 1..3) {
-                                for (j in 1..2) {
-                                    drawCircle(
-                                        color = lineColor.copy(alpha = 0.7f),
-                                        radius = 0.9f,
-                                        center = Offset(i * spacingX, j * spacingY)
-                                    )
-                                }
-                            }
-                        }
-                        PageBackground.MATHEMATICS -> {
-                            val spacing = size.height / 5f
-                            for (i in 1..4) {
-                                val y = i * spacing
-                                val isAxis = i == 2
-                                drawLine(
-                                    color = if (isAxis) Color(0xFF475569) else lineColor.copy(alpha = 0.35f),
-                                    start = Offset(2f, y),
-                                    end = Offset(size.width - 2f, y),
-                                    strokeWidth = if (isAxis) 1.0f else 0.5f
-                                )
-                            }
-                            val spacingX = size.width / 6f
-                            for (i in 1..5) {
-                                val x = i * spacingX
-                                val isAxis = i == 3
-                                drawLine(
-                                    color = if (isAxis) Color(0xFF475569) else lineColor.copy(alpha = 0.35f),
-                                    start = Offset(x, 2f),
-                                    end = Offset(x, size.height - 2f),
-                                    strokeWidth = if (isAxis) 1.0f else 0.5f
-                                )
-                            }
-                        }
-                    }
-                }
+                TemplatePreviewCanvas(background = bg, isDark = false)
             }
             Text(
                 text = bg.label,

@@ -619,27 +619,24 @@ class JetpackInkEngine : InkingEngine {
     }
 
     override fun setPageBackground(background: PageBackground) {
+        setPageBackground(background, null)
+    }
 
+    fun setPageBackground(background: PageBackground, paperColor: Long? = null) {
         if (_state.value.pageBackground != background) {
-
             contentVersionCounter++
-
         }
-
         _state.update {
-
             it.copy(
-
                 pageBackground = background,
-
                 contentVersion = contentVersionCounter
-
             )
-
         }
+        finishedStrokesView?.updatePageBackground(background, paperColor)
+    }
 
-        finishedStrokesView?.updatePageBackground(background)
-
+    fun setPaperColor(paperColor: Long) {
+        finishedStrokesView?.updatePaperColor(paperColor)
     }
 
 

@@ -882,14 +882,16 @@ private fun RecentPageCard(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Miniatura gráfica com textura de folha
+            // Miniatura gráfica com textura de folha e modelo
+            val paperColor = Color(page.paperColor.toInt())
+            val isDarkPaper = com.example.lenote.ink.PaperColors.isDarkPaper(page.paperColor)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(110.dp),
                 shape = RoundedCornerShape(6.dp),
-                color = Color(0xFFFCFCFA),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                color = paperColor,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isDarkPaper) Color(0xFF334155) else Color(0xFFE2E8F0))
             ) {
                 if (thumbBitmap != null) {
                     Image(
@@ -899,7 +901,7 @@ private fun RecentPageCard(
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    MiniPageBackgroundCanvas(pageBackground = page.pageBackground)
+                    TemplatePreviewCanvas(background = page.pageBackground, isDark = isDarkPaper)
                 }
             }
 
@@ -929,55 +931,14 @@ private fun RecentPageCard(
 @Composable
 private fun MiniPageBackgroundCanvas(
     pageBackground: PageBackground,
+    paperColor: Long = 0xFFFFFFFF,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier.fillMaxSize()) {
-        val lineColor = Color(0xFF94A3B8).copy(alpha = 0.5f)
-        when (pageBackground) {
-            PageBackground.BLANK -> {}
-            PageBackground.RULED -> {
-                val spacing = size.height / 7f
-                for (i in 1..6) {
-                    val y = i * spacing
-                    drawLine(
-                        color = lineColor,
-                        start = Offset(4f, y),
-                        end = Offset(size.width - 4f, y),
-                        strokeWidth = 0.8f
-                    )
-                }
-            }
-            PageBackground.GRID -> {
-                val spacingX = size.width / 6f
-                val spacingY = size.height / 7f
-                for (i in 1 until 6) {
-                    val x = i * spacingX
-                    drawLine(color = lineColor.copy(alpha = 0.3f), start = Offset(x, 2f), end = Offset(x, size.height - 2f), strokeWidth = 0.6f)
-                }
-                for (i in 1 until 7) {
-                    val y = i * spacingY
-                    drawLine(color = lineColor.copy(alpha = 0.3f), start = Offset(2f, y), end = Offset(size.width - 2f, y), strokeWidth = 0.6f)
-                }
-            }
-            PageBackground.DOTS -> {
-                val spacingX = size.width / 5f
-                val spacingY = size.height / 7f
-                for (i in 1..4) {
-                    for (j in 1..6) {
-                        drawCircle(color = lineColor, radius = 0.9f, center = Offset(i * spacingX, j * spacingY))
-                    }
-                }
-            }
-            PageBackground.MATHEMATICS -> {
-                val spacing = size.height / 8f
-                for (i in 1..7) {
-                    val y = i * spacing
-                    val isAxis = i == 4
-                    drawLine(color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.3f), start = Offset(2f, y), end = Offset(size.width - 2f, y), strokeWidth = if (isAxis) 1f else 0.5f)
-                }
-            }
-        }
-    }
+    TemplatePreviewCanvas(
+        background = pageBackground,
+        isDark = com.example.lenote.ink.PaperColors.isDarkPaper(paperColor),
+        modifier = modifier
+    )
 }
 
 /**

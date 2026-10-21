@@ -100,6 +100,8 @@ fun CollapsibleNavigationSidebar(
     val deletedPages by viewModel.deletedPages.collectAsState()
 
     var showTrashDialog by remember { mutableStateOf(false) }
+    var showCreatePageTemplateDialog by remember { mutableStateOf(false) }
+    var pageToChangeTemplate by remember { mutableStateOf<PageEntity?>(null) }
     var notebookToExport by remember { mutableStateOf<NotebookEntity?>(null) }
     var notebookToDeletePermanently by remember { mutableStateOf<NotebookEntity?>(null) }
     var pageToDeletePermanently by remember { mutableStateOf<PageEntity?>(null) }
@@ -294,7 +296,8 @@ fun CollapsibleNavigationSidebar(
                             onDuplicate = { viewModel.duplicatePage(page.id) },
                             onMoveUp = {},
                             onMoveDown = {},
-                            onDelete = { viewModel.deletePage(page.id) },
+                            onChangeTemplate = { pageToChangeTemplate = page },
+                            onDelete = { viewModel.movePageToTrash(page.id) },
                             showReorderButtons = false
                         )
                     }
@@ -507,7 +510,7 @@ fun CollapsibleNavigationSidebar(
 
                     // Ação principal evidente: + Página
                     Button(
-                        onClick = { viewModel.createNewPage() },
+                        onClick = { showCreatePageTemplateDialog = true },
                         shape = RoundedCornerShape(6.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                         modifier = Modifier.height(28.dp),
@@ -547,7 +550,8 @@ fun CollapsibleNavigationSidebar(
                             onDuplicate = { viewModel.duplicatePage(page.id) },
                             onMoveUp = { viewModel.movePageOrder(page.id, moveUp = true) },
                             onMoveDown = { viewModel.movePageOrder(page.id, moveUp = false) },
-                            onDelete = { viewModel.deletePage(page.id) },
+                            onChangeTemplate = { pageToChangeTemplate = page },
+                            onDelete = { viewModel.movePageToTrash(page.id) },
                             showReorderButtons = !showFavoritesOnly
                         )
                     }
@@ -744,6 +748,41 @@ fun CollapsibleNavigationSidebar(
         )
     }
 
+    // Diálogo de Seleção de Modelo para Nova Página
+    if (showCreatePageTemplateDialog) {
+        PageTemplatePickerDialog(
+            initialTitle = "Página ${pages.size + 1}",
+            initialBackground = currentPage?.pageBackground ?: PageBackground.RULED,
+            initialPaperColor = currentPage?.paperColor ?: 0xFFFFFFFF,
+            isCreateMode = true,
+            onConfirm = { newTitle, bg, paperColor ->
+                showCreatePageTemplateDialog = false
+                viewModel.createNewPage(
+                    title = newTitle.ifBlank { "Página ${pages.size + 1}" },
+                    background = bg,
+                    paperColor = paperColor
+                )
+            },
+            onDismiss = { showCreatePageTemplateDialog = false }
+        )
+    }
+
+    // Diálogo de Alteração de Modelo para Página Existente
+    if (pageToChangeTemplate != null) {
+        val targetPage = pageToChangeTemplate!!
+        PageTemplatePickerDialog(
+            initialTitle = targetPage.title,
+            initialBackground = targetPage.pageBackground,
+            initialPaperColor = targetPage.paperColor,
+            isCreateMode = false,
+            onConfirm = { _, bg, paperColor ->
+                pageToChangeTemplate = null
+                viewModel.changePageTemplate(bg, paperColor)
+            },
+            onDismiss = { pageToChangeTemplate = null }
+        )
+    }
+
     val activeDialog = dialogMode
     if (activeDialog != null) {
         val titleText = when (activeDialog) {
@@ -835,6 +874,7 @@ private fun PageListItemCard(
     onDuplicate: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
+    onChangeTemplate: () -> Unit = {},
     onDelete: () -> Unit,
     showReorderButtons: Boolean
 ) {
@@ -868,6 +908,7 @@ private fun PageListItemCard(
             // 1. Miniatura da Página (Thumbnail de alta qualidade com padrão de folha ou traços)
             PageThumbnailPreview(
                 pageBackground = page.pageBackground,
+                paperColorLong = page.paperColor,
                 bitmap = thumbBitmap,
                 modifier = Modifier.size(width = 46.dp, height = 62.dp)
             )
@@ -989,6 +1030,22 @@ private fun PageListItemCard(
                     HorizontalDivider(color = Color(0xFFE2E8F0))
 
                     DropdownMenuItem(
+                        text = { Text("Alterar Modelo de Fundo", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.SlidersHorizontal,
+                                contentDescription = null,
+                                tint = Color(0xFF475569),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        onClick = {
+                            isContextMenuOpen = false
+                            onChangeTemplate()
+                        }
+                    )
+
+                    DropdownMenuItem(
                         text = {
                             Text(
                                 text = "Mover para Lixeira",
@@ -1022,14 +1079,16 @@ private fun PageListItemCard(
 @Composable
 private fun PageThumbnailPreview(
     pageBackground: PageBackground,
+    paperColorLong: Long = 0xFFFFFFFF,
     bitmap: androidx.compose.ui.graphics.ImageBitmap?,
     modifier: Modifier = Modifier
 ) {
+    val isDark = com.example.lenote.ink.PaperColors.isDarkPaper(paperColorLong)
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(4.dp),
-        color = Color(0xFFFCFCFA),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+        color = Color(paperColorLong.toInt()),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
         shadowElevation = 1.dp
     ) {
         if (bitmap != null) {
@@ -1040,85 +1099,7 @@ private fun PageThumbnailPreview(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val lineColor = Color(0xFF94A3B8).copy(alpha = 0.6f)
-                when (pageBackground) {
-                    PageBackground.BLANK -> {
-                        // Folha em branco
-                    }
-                    PageBackground.RULED -> {
-                        val spacing = size.height / 6f
-                        for (i in 1..5) {
-                            val y = i * spacing
-                            drawLine(
-                                color = lineColor,
-                                start = Offset(3f, y),
-                                end = Offset(size.width - 3f, y),
-                                strokeWidth = 0.8f
-                            )
-                        }
-                    }
-                    PageBackground.GRID -> {
-                        val spacingX = size.width / 5f
-                        val spacingY = size.height / 6f
-                        for (i in 1 until 5) {
-                            val x = i * spacingX
-                            drawLine(
-                                color = lineColor.copy(alpha = 0.4f),
-                                start = Offset(x, 2f),
-                                end = Offset(x, size.height - 2f),
-                                strokeWidth = 0.6f
-                            )
-                        }
-                        for (i in 1 until 6) {
-                            val y = i * spacingY
-                            drawLine(
-                                color = lineColor.copy(alpha = 0.4f),
-                                start = Offset(2f, y),
-                                end = Offset(size.width - 2f, y),
-                                strokeWidth = 0.6f
-                            )
-                        }
-                    }
-                    PageBackground.DOTS -> {
-                        val spacingX = size.width / 4.5f
-                        val spacingY = size.height / 6f
-                        for (i in 1..3) {
-                            for (j in 1..5) {
-                                drawCircle(
-                                    color = lineColor,
-                                    radius = 0.9f,
-                                    center = Offset(i * spacingX, j * spacingY)
-                                )
-                            }
-                        }
-                    }
-                    PageBackground.MATHEMATICS -> {
-                        val spacing = size.height / 7f
-                        for (i in 1..6) {
-                            val y = i * spacing
-                            val isAxis = i == 3
-                            drawLine(
-                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
-                                start = Offset(2f, y),
-                                end = Offset(size.width - 2f, y),
-                                strokeWidth = if (isAxis) 1.0f else 0.5f
-                            )
-                        }
-                        val spacingX = size.width / 5f
-                        for (i in 1..4) {
-                            val x = i * spacingX
-                            val isAxis = i == 2
-                            drawLine(
-                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
-                                start = Offset(x, 2f),
-                                end = Offset(x, size.height - 2f),
-                                strokeWidth = if (isAxis) 1.0f else 0.5f
-                            )
-                        }
-                    }
-                }
-            }
+            TemplatePreviewCanvas(background = pageBackground, isDark = isDark)
         }
     }
 }

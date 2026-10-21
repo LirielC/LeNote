@@ -257,7 +257,7 @@ class InkPlaygroundViewModel : ViewModel() {
         _currentSearchHighlights.value = emptyList()
         val repo = repository ?: return
         val bytes = repo.loadPageStrokes(page.id)
-        engine.setPageBackground(page.pageBackground)
+        engine.setPageBackground(page.pageBackground, page.paperColor)
 
         // Se houver PDF associado, renderiza o bitmap de alta resolução em segundo plano
         if (!page.pdfPath.isNullOrBlank() && page.pdfPageIndex != null) {
@@ -353,7 +353,8 @@ class InkPlaygroundViewModel : ViewModel() {
                 zoom = engineState.zoomLevel,
                 panX = engineState.panOffsetX,
                 panY = engineState.panOffsetY,
-                thumbnailBitmap = thumbBmp
+                thumbnailBitmap = thumbBmp,
+                paperColor = page.paperColor
             )
             thumbBmp?.recycle()
         }
@@ -629,16 +630,31 @@ class InkPlaygroundViewModel : ViewModel() {
         }
     }
 
-    fun createNewPage(title: String? = null) {
+    fun createNewPage(
+        title: String? = null,
+        background: PageBackground = engine.state.value.pageBackground,
+        paperColor: Long = _currentPage.value?.paperColor ?: 0xFFFFFFFF
+    ) {
         val repo = repository ?: return
         val secId = _selectedSectionId.value ?: return
         flushCurrentPageSave()
         val page = repo.createPage(
             sectionId = secId,
             title = title?.ifBlank { null } ?: "Página ${_pages.value.size + 1}",
-            pageBackground = engine.state.value.pageBackground
+            pageBackground = background,
+            paperColor = paperColor
         )
         loadPageIntoEngine(page)
+    }
+
+    fun changePageTemplate(background: PageBackground, paperColor: Long) {
+        val cur = _currentPage.value ?: return
+        val repo = repository ?: return
+        engine.setPageBackground(background, paperColor)
+        val updated = cur.copy(pageBackground = background, paperColor = paperColor)
+        _currentPage.value = updated
+        repo.updatePageTemplate(cur.id, background, paperColor)
+        scheduleAutoSave()
     }
 
     fun renameCurrentPage(newTitle: String) {
@@ -665,9 +681,11 @@ class InkPlaygroundViewModel : ViewModel() {
     }
 
     fun changePageBackground(background: PageBackground) {
-        engine.setPageBackground(background)
-        _currentPage.value?.let { page ->
+        val cur = _currentPage.value
+        engine.setPageBackground(background, cur?.paperColor)
+        cur?.let { page ->
             _currentPage.value = page.copy(pageBackground = background)
+            repository?.updatePageTemplate(page.id, background, page.paperColor)
         }
         scheduleAutoSave()
     }

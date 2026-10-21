@@ -35,6 +35,7 @@ class FinishedStrokesView @JvmOverloads constructor(
     private val matrixValues = FloatArray(9)
 
     private var pageBackground: PageBackground = PageBackground.BLANK
+    private var paperColorLong: Long = 0xFFFFFFFF
     private var pdfBackgroundBitmap: android.graphics.Bitmap? = null
     private val pdfPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
@@ -210,25 +211,49 @@ class FinishedStrokesView @JvmOverloads constructor(
         staticCacheDirty = true
     }
 
+    private fun updatePaintsForTheme(dark: Boolean, paperColor: Long) {
+        if (paperColor == 0xFFFFF9D2) {
+            // Legal Yellow: linhas azuis suaves e margem vermelha clássica
+            paperBackgroundPaint.color = 0xFFFFF9D2.toInt()
+            ruledLinePaint.color = 0xFF90CAF9.toInt()
+            marginLinePaint.color = 0xFFEF9A9A.toInt()
+            gridMinorPaint.color = 0xFFE0E0A0.toInt()
+            gridMajorPaint.color = 0xFFB0C4DE.toInt()
+            mathAxisPaint.color = 0xFF5C6BC0.toInt()
+            dotPaint.color = 0xFF7986CB.toInt()
+        } else if (paperColor == 0xFFF8F3E6) {
+            // Sépia / Creme: tons terrosos suaves
+            paperBackgroundPaint.color = 0xFFF8F3E6.toInt()
+            ruledLinePaint.color = 0xFFD7CCC8.toInt()
+            marginLinePaint.color = 0xFFFFAB91.toInt()
+            gridMinorPaint.color = 0xFFEFEBE9.toInt()
+            gridMajorPaint.color = 0xFFBCAAA4.toInt()
+            mathAxisPaint.color = 0xFF8D6E63.toInt()
+            dotPaint.color = 0xFFA1887F.toInt()
+        } else if (dark) {
+            paperBackgroundPaint.color = if (paperColor == 0xFF121212) 0xFF121212.toInt() else (if (isDarkMode) 0xFF121212.toInt() else paperColor.toInt())
+            ruledLinePaint.color = 0xFF2A3644.toInt()
+            marginLinePaint.color = 0xFF5C2D32.toInt()
+            gridMinorPaint.color = 0xFF1E2836.toInt()
+            gridMajorPaint.color = 0xFF33445C.toInt()
+            mathAxisPaint.color = 0xFF4F698A.toInt()
+            dotPaint.color = 0xFF475569.toInt()
+        } else {
+            paperBackgroundPaint.color = paperColor.toInt()
+            ruledLinePaint.color = 0xFFBBDEFB.toInt()
+            marginLinePaint.color = 0xFFFFCDD2.toInt()
+            gridMinorPaint.color = 0xFFE3EAF2.toInt()
+            gridMajorPaint.color = 0xFFB0C4DE.toInt()
+            mathAxisPaint.color = 0xFF78909C.toInt()
+            dotPaint.color = 0xFFB0BEC5.toInt()
+        }
+    }
+
     fun setDarkMode(darkMode: Boolean) {
         if (isDarkMode != darkMode) {
             isDarkMode = darkMode
-            paperBackgroundPaint.color = ColorInversionHelper.getPaperBackgroundColor(darkMode)
-            if (darkMode) {
-                ruledLinePaint.color = 0xFF2A3644.toInt()
-                marginLinePaint.color = 0xFF5C2D32.toInt()
-                gridMinorPaint.color = 0xFF1E2836.toInt()
-                gridMajorPaint.color = 0xFF33445C.toInt()
-                mathAxisPaint.color = 0xFF4F698A.toInt()
-                dotPaint.color = 0xFF475569.toInt()
-            } else {
-                ruledLinePaint.color = 0xFFBBDEFB.toInt()
-                marginLinePaint.color = 0xFFFFCDD2.toInt()
-                gridMinorPaint.color = 0xFFE3EAF2.toInt()
-                gridMajorPaint.color = 0xFFB0C4DE.toInt()
-                mathAxisPaint.color = 0xFF78909C.toInt()
-                dotPaint.color = 0xFFB0BEC5.toInt()
-            }
+            val isDark = darkMode || PaperColors.isDarkPaper(paperColorLong)
+            updatePaintsForTheme(isDark, paperColorLong)
             staticCacheDirty = true
             invalidate()
         }
@@ -347,12 +372,36 @@ class FinishedStrokesView @JvmOverloads constructor(
         }
     }
 
-    fun updatePageBackground(background: PageBackground) {
+    fun updatePageBackground(background: PageBackground, paperColor: Long? = null) {
+        var changed = false
         if (pageBackground != background) {
             pageBackground = background
+            changed = true
+        }
+        if (paperColor != null && paperColorLong != paperColor) {
+            paperColorLong = paperColor
+            updatePaperColorInternal(paperColor)
+            changed = true
+        }
+        if (changed) {
             staticCacheDirty = true
             invalidate()
         }
+    }
+
+    fun updatePaperColor(paperColor: Long) {
+        if (paperColorLong != paperColor) {
+            paperColorLong = paperColor
+            updatePaperColorInternal(paperColor)
+            staticCacheDirty = true
+            invalidate()
+        }
+    }
+
+    private fun updatePaperColorInternal(colorLong: Long) {
+        paperBackgroundPaint.color = colorLong.toInt()
+        val isDark = isDarkMode || PaperColors.isDarkPaper(colorLong)
+        updatePaintsForTheme(isDark, colorLong)
     }
 
     fun updateEraserIndicator(
@@ -787,6 +836,139 @@ class FinishedStrokesView @JvmOverloads constructor(
                         else -> gridMinorPaint
                     }
                     canvas.drawLine(worldLeft, y, worldRight, y, paint)
+                }
+            }
+
+            PageBackground.CORNELL -> {
+                // Método Cornell:
+                // - Cabeçalho superior (y = 140f)
+                // - Coluna esquerda de Cues/Palavras-chave (x = 340f)
+                // - Linha de rodapé para Resumo/Summary (y = 1350f)
+                // - Pautas horizontais de 42f no corpo de notas
+                val headerY = 140f
+                val cueColumnX = 340f
+                val summaryY = 1350f
+                val pautaStep = 44f
+
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+                marginLinePaint.strokeWidth = mediumStrokeWorld
+
+                // Linhas pautadas suaves no corpo (entre header e summary, à direita de cueColumnX)
+                var y = headerY + pautaStep
+                while (y < summaryY) {
+                    if (y in worldTop..worldBottom) {
+                        val lineStartX = max(worldLeft, cueColumnX)
+                        val lineEndX = max(lineStartX, worldRight)
+                        canvas.drawLine(lineStartX, y, lineEndX, y, ruledLinePaint)
+                    }
+                    y += pautaStep
+                }
+
+                // Linha de cabeçalho horizontal
+                if (headerY in worldTop..worldBottom) {
+                    canvas.drawLine(worldLeft, headerY, worldRight, headerY, marginLinePaint)
+                }
+
+                // Linha de rodapé do sumário horizontal
+                if (summaryY in worldTop..worldBottom) {
+                    canvas.drawLine(worldLeft, summaryY, worldRight, summaryY, marginLinePaint)
+                }
+
+                // Divisória vertical de Cues (entre o cabeçalho e o sumário)
+                if (cueColumnX in worldLeft..worldRight) {
+                    val vTop = max(worldTop, headerY)
+                    val vBottom = min(worldBottom, summaryY)
+                    if (vBottom > vTop) {
+                        canvas.drawLine(cueColumnX, vTop, cueColumnX, vBottom, marginLinePaint)
+                    }
+                }
+            }
+
+            PageBackground.WEEKLY_PLANNER -> {
+                // Planner Semanal: 7 colunas ou blocos organizados
+                // Divisões verticais para os dias da semana (Segunda a Sábado + Domingo/Metas)
+                val headerY = 100f
+                val colCount = 7
+                val plannerWidth = 1400f
+                val colWidth = plannerWidth / colCount
+                val plannerBottom = 1500f
+
+                gridMajorPaint.strokeWidth = mediumStrokeWorld
+                gridMinorPaint.strokeWidth = thinStrokeWorld
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+
+                // Cabeçalho dos dias
+                if (headerY in worldTop..worldBottom) {
+                    canvas.drawLine(0f, headerY, plannerWidth, headerY, gridMajorPaint)
+                }
+                if (plannerBottom in worldTop..worldBottom) {
+                    canvas.drawLine(0f, plannerBottom, plannerWidth, plannerBottom, gridMajorPaint)
+                }
+
+                // Linhas verticais das colunas
+                for (i in 0..colCount) {
+                    val x = i * colWidth
+                    if (x in worldLeft..worldRight) {
+                        canvas.drawLine(x, max(0f, worldTop), x, min(plannerBottom, worldBottom), gridMajorPaint)
+                    }
+                }
+
+                // Pautas sutis dentro de cada coluna
+                val slotSpacing = 42f
+                var sy = headerY + slotSpacing
+                while (sy < plannerBottom) {
+                    if (sy in worldTop..worldBottom) {
+                        canvas.drawLine(0f, sy, plannerWidth, sy, ruledLinePaint)
+                    }
+                    sy += slotSpacing
+                }
+            }
+
+            PageBackground.ENGINEERING_GRAPH -> {
+                // Papel de Engenharia / Milimetrado Técnico:
+                // Passo fino de 16f, linha mestra reforçada a cada 10 divisões (160f)
+                val minorStep = 16f
+                val majorMultiple = 10
+                gridMinorPaint.strokeWidth = thinStrokeWorld
+                gridMajorPaint.strokeWidth = mediumStrokeWorld
+
+                val firstCol = floor(worldLeft / minorStep).toInt()
+                val lastCol = ceil(worldRight / minorStep).toInt()
+                for (col in firstCol..lastCol) {
+                    val x = col * minorStep
+                    val paint = if (col % majorMultiple == 0) gridMajorPaint else gridMinorPaint
+                    canvas.drawLine(x, worldTop, x, worldBottom, paint)
+                }
+
+                val firstRow = floor(worldTop / minorStep).toInt()
+                val lastRow = ceil(worldBottom / minorStep).toInt()
+                for (row in firstRow..lastRow) {
+                    val y = row * minorStep
+                    val paint = if (row % majorMultiple == 0) gridMajorPaint else gridMinorPaint
+                    canvas.drawLine(worldLeft, y, worldRight, y, paint)
+                }
+            }
+
+            PageBackground.MUSIC_STAFF -> {
+                // Partitura Musical: Pentagramas de 5 linhas com espaçamento de 10f entre linhas,
+                // e separação de 90f entre cada conjunto de pautas.
+                val lineGap = 11f
+                val staffHeight = lineGap * 4f // 5 linhas = 4 intervalos
+                val staffGroupSpacing = 110f
+                val staffStep = staffHeight + staffGroupSpacing
+
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+                val firstStaffIndex = floor(worldTop / staffStep).toInt()
+                val lastStaffIndex = ceil(worldBottom / staffStep).toInt()
+
+                for (idx in firstStaffIndex..lastStaffIndex) {
+                    val staffTopY = idx * staffStep
+                    for (l in 0..4) {
+                        val lineY = staffTopY + l * lineGap
+                        if (lineY in worldTop..worldBottom) {
+                            canvas.drawLine(worldLeft, lineY, worldRight, lineY, ruledLinePaint)
+                        }
+                    }
                 }
             }
         }

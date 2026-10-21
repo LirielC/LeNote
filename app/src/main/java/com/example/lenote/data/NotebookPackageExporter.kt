@@ -282,6 +282,7 @@ object NotebookPackageExporter {
                     sectionId = targetSecId,
                     title = pObj.optString("title", "Página ${i + 1}"),
                     pageBackground = runCatching { PageBackground.valueOf(pObj.getString("pageBackground")) }.getOrDefault(PageBackground.BLANK),
+                    paperColor = pObj.optLong("paperColor", 0xFFFFFFFF),
                     zoom = pObj.optDouble("zoom", 1.0).toFloat(),
                     panX = pObj.optDouble("panX", 0.0).toFloat(),
                     panY = pObj.optDouble("panY", 0.0).toFloat(),

@@ -38,6 +38,7 @@ data class PageEntity(
     val sectionId: String,
     val title: String,
     val pageBackground: PageBackground = PageBackground.BLANK,
+    val paperColor: Long = 0xFFFFFFFF,
     val zoom: Float = 1.0f,
     val panX: Float = 0f,
     val panY: Float = 0f,

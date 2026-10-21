@@ -248,6 +248,7 @@ class NoteRepository(
         sectionId: String,
         title: String,
         pageBackground: PageBackground = PageBackground.BLANK,
+        paperColor: Long = 0xFFFFFFFF,
         pdfPath: String? = null,
         pdfPageIndex: Int? = null
     ): PageEntity {
@@ -260,6 +261,7 @@ class NoteRepository(
             sectionId = sectionId,
             title = title.trim().ifEmpty { "Nova Página" },
             pageBackground = pageBackground,
+            paperColor = paperColor,
             zoom = 1.0f,
             panX = 0f,
             panY = 0f,
@@ -274,6 +276,18 @@ class NoteRepository(
         )
         database.upsertPage(page)
         return page
+    }
+
+    @Synchronized
+    fun updatePageTemplate(pageId: String, background: PageBackground, paperColor: Long) {
+        val current = database.getPageById(pageId) ?: return
+        database.upsertPage(
+            current.copy(
+                pageBackground = background,
+                paperColor = paperColor,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
     }
 
     /**
@@ -421,7 +435,8 @@ class NoteRepository(
         zoom: Float,
         panX: Float,
         panY: Float,
-        thumbnailBitmap: Bitmap? = null
+        thumbnailBitmap: Bitmap? = null,
+        paperColor: Long? = null
     ): PageEntity? {
         val current = database.getPageById(pageId) ?: return null
         val savedPath = strokeStorage.savePageStrokesAtomic(pageId, strokesBytes)
@@ -432,6 +447,7 @@ class NoteRepository(
         }
         val updated = current.copy(
             pageBackground = pageBackground,
+            paperColor = paperColor ?: current.paperColor,
             zoom = zoom,
             panX = panX,
             panY = panY,

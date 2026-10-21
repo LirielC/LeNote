@@ -28,7 +28,11 @@ class SmoothingConfigurationUnitTest {
                 PageBackground.RULED,
                 PageBackground.GRID,
                 PageBackground.DOTS,
-                PageBackground.MATHEMATICS
+                PageBackground.MATHEMATICS,
+                PageBackground.CORNELL,
+                PageBackground.WEEKLY_PLANNER,
+                PageBackground.ENGINEERING_GRAPH,
+                PageBackground.MUSIC_STAFF
             ),
             PageBackground.entries
         )

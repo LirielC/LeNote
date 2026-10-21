@@ -131,6 +131,7 @@ class LeNoteDatabase private constructor(
                         pdf_page_index INTEGER,
                         is_deleted INTEGER NOT NULL DEFAULT 0,
                         deleted_at INTEGER,
+                        paper_color INTEGER NOT NULL DEFAULT -1,
                         FOREIGN KEY(sectionId) REFERENCES sections(id) ON DELETE CASCADE
                     )
                     """.trimIndent()
@@ -242,6 +243,11 @@ class LeNoteDatabase private constructor(
                         db.execSQL("ALTER TABLE pages ADD COLUMN deleted_at INTEGER")
                     } catch (_: Exception) {}
                 }
+                if (oldVersion < 7) {
+                    try {
+                        db.execSQL("ALTER TABLE pages ADD COLUMN paper_color INTEGER NOT NULL DEFAULT -1")
+                    } catch (_: Exception) {}
+                }
             }
         }
     } else {
@@ -310,7 +316,7 @@ class LeNoteDatabase private constructor(
 
             memPages.clear()
             db.rawQuery(
-                "SELECT id, sectionId, title, pageBackground, zoom, panX, panY, strokesFilePath, thumbnailPath, isFavorite, createdAt, updatedAt, sortOrder, pdf_path, pdf_page_index, is_deleted, deleted_at FROM pages ORDER BY sortOrder ASC, createdAt ASC",
+                "SELECT id, sectionId, title, pageBackground, zoom, panX, panY, strokesFilePath, thumbnailPath, isFavorite, createdAt, updatedAt, sortOrder, pdf_path, pdf_page_index, is_deleted, deleted_at, paper_color FROM pages ORDER BY sortOrder ASC, createdAt ASC",
                 null
             ).use { c ->
                 while (c.moveToNext()) {
@@ -337,7 +343,8 @@ class LeNoteDatabase private constructor(
                         pdfPath = if (c.isNull(13)) null else c.getString(13),
                         pdfPageIndex = if (c.isNull(14)) null else c.getInt(14),
                         isDeleted = c.getInt(15) != 0,
-                        deletedAt = if (c.isNull(16)) null else c.getLong(16)
+                        deletedAt = if (c.isNull(16)) null else c.getLong(16),
+                        paperColor = if (c.columnCount > 17 && !c.isNull(17)) c.getLong(17) else 0xFFFFFFFF
                     )
                     memPages[item.id] = item
                 }
@@ -542,6 +549,7 @@ class LeNoteDatabase private constructor(
                 }
                 put("is_deleted", if (page.isDeleted) 1 else 0)
                 if (page.deletedAt != null) put("deleted_at", page.deletedAt) else putNull("deleted_at")
+                put("paper_color", page.paperColor)
             }
             db.insertWithOnConflict("pages", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         }
@@ -700,7 +708,7 @@ class LeNoteDatabase private constructor(
     }
 
     companion object {
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
         @Volatile
         private var INSTANCE: LeNoteDatabase? = null

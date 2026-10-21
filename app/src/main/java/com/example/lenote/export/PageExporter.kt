@@ -221,6 +221,7 @@ object PageExporter {
         strokes: List<Stroke>,
         headerTitle: String? = null,
         isDarkMode: Boolean = false,
+        paperColor: Long = 0xFFFFFFFF,
         pdfPath: String? = null,
         pdfPageIndex: Int? = null,
         textBlocks: List<CanvasTextBlock> = emptyList(),
@@ -228,6 +229,8 @@ object PageExporter {
     ) {
         val paperBgColor = if (isDarkMode) {
             com.example.lenote.ink.ColorInversionHelper.getPaperBackgroundColor(true)
+        } else if (paperColor != 0xFFFFFFFF) {
+            paperColor.toInt()
         } else {
             paperBackgroundPaint.color
         }
@@ -804,6 +807,108 @@ object PageExporter {
                         else -> gridMinorPaint
                     }
                     canvas.drawLine(worldLeft, y, worldRight, y, paint)
+                }
+            }
+            PageBackground.CORNELL -> {
+                val headerY = 140f
+                val cueColumnX = 340f
+                val summaryY = 1350f
+                val pautaStep = 44f
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+                marginLinePaint.strokeWidth = mediumStrokeWorld
+
+                var y = headerY + pautaStep
+                while (y < summaryY) {
+                    if (y in worldTop..worldBottom) {
+                        val lineStartX = max(worldLeft, cueColumnX)
+                        val lineEndX = max(lineStartX, worldRight)
+                        canvas.drawLine(lineStartX, y, lineEndX, y, ruledLinePaint)
+                    }
+                    y += pautaStep
+                }
+                if (headerY in worldTop..worldBottom) {
+                    canvas.drawLine(worldLeft, headerY, worldRight, headerY, marginLinePaint)
+                }
+                if (summaryY in worldTop..worldBottom) {
+                    canvas.drawLine(worldLeft, summaryY, worldRight, summaryY, marginLinePaint)
+                }
+                if (cueColumnX in worldLeft..worldRight) {
+                    val vTop = max(worldTop, headerY)
+                    val vBottom = min(worldBottom, summaryY)
+                    if (vBottom > vTop) {
+                        canvas.drawLine(cueColumnX, vTop, cueColumnX, vBottom, marginLinePaint)
+                    }
+                }
+            }
+            PageBackground.WEEKLY_PLANNER -> {
+                val headerY = 100f
+                val colCount = 7
+                val plannerWidth = 1400f
+                val colWidth = plannerWidth / colCount
+                val plannerBottom = 1500f
+                gridMajorPaint.strokeWidth = mediumStrokeWorld
+                gridMinorPaint.strokeWidth = thinStrokeWorld
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+
+                if (headerY in worldTop..worldBottom) {
+                    canvas.drawLine(0f, headerY, plannerWidth, headerY, gridMajorPaint)
+                }
+                if (plannerBottom in worldTop..worldBottom) {
+                    canvas.drawLine(0f, plannerBottom, plannerWidth, plannerBottom, gridMajorPaint)
+                }
+                for (i in 0..colCount) {
+                    val x = i * colWidth
+                    if (x in worldLeft..worldRight) {
+                        canvas.drawLine(x, max(0f, worldTop), x, min(plannerBottom, worldBottom), gridMajorPaint)
+                    }
+                }
+                val slotSpacing = 42f
+                var sy = headerY + slotSpacing
+                while (sy < plannerBottom) {
+                    if (sy in worldTop..worldBottom) {
+                        canvas.drawLine(0f, sy, plannerWidth, sy, ruledLinePaint)
+                    }
+                    sy += slotSpacing
+                }
+            }
+            PageBackground.ENGINEERING_GRAPH -> {
+                val minorStep = 16f
+                val majorMultiple = 10
+                gridMinorPaint.strokeWidth = thinStrokeWorld
+                gridMajorPaint.strokeWidth = mediumStrokeWorld
+
+                val firstCol = floor(worldLeft / minorStep).toInt()
+                val lastCol = ceil(worldRight / minorStep).toInt()
+                for (col in firstCol..lastCol) {
+                    val x = col * minorStep
+                    val paint = if (col % majorMultiple == 0) gridMajorPaint else gridMinorPaint
+                    canvas.drawLine(x, worldTop, x, worldBottom, paint)
+                }
+                val firstRow = floor(worldTop / minorStep).toInt()
+                val lastRow = ceil(worldBottom / minorStep).toInt()
+                for (row in firstRow..lastRow) {
+                    val y = row * minorStep
+                    val paint = if (row % majorMultiple == 0) gridMajorPaint else gridMinorPaint
+                    canvas.drawLine(worldLeft, y, worldRight, y, paint)
+                }
+            }
+            PageBackground.MUSIC_STAFF -> {
+                val lineGap = 11f
+                val staffHeight = lineGap * 4f
+                val staffGroupSpacing = 110f
+                val staffStep = staffHeight + staffGroupSpacing
+                ruledLinePaint.strokeWidth = thinStrokeWorld
+
+                val firstStaffIndex = floor(worldTop / staffStep).toInt()
+                val lastStaffIndex = ceil(worldBottom / staffStep).toInt()
+                for (idx in firstStaffIndex..lastStaffIndex) {
+                    val staffTopY = idx * staffStep
+                    for (l in 0..4) {
+                        val lineY = staffTopY + l * lineGap
+                        if (lineY in worldTop..worldBottom) {
+                            canvas.drawLine(worldLeft, lineY, worldRight, lineY, ruledLinePaint)
+                        }
+                    }
                 }
             }
         }
