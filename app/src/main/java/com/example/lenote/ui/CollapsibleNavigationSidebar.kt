@@ -96,6 +96,14 @@ fun CollapsibleNavigationSidebar(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
     val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
+    val deletedNotebooks by viewModel.deletedNotebooks.collectAsState()
+    val deletedPages by viewModel.deletedPages.collectAsState()
+
+    var showTrashDialog by remember { mutableStateOf(false) }
+    var notebookToExport by remember { mutableStateOf<NotebookEntity?>(null) }
+    var notebookToDeletePermanently by remember { mutableStateOf<NotebookEntity?>(null) }
+    var pageToDeletePermanently by remember { mutableStateOf<PageEntity?>(null) }
+    var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     var showFavoritesOnly by remember { mutableStateOf(false) }
@@ -122,6 +130,29 @@ fun CollapsibleNavigationSidebar(
                 viewModel.importPdfDocument(title, targetFile)
             } catch (_: Exception) {}
         }
+    }
+
+    // Launcher SAF para exportar pacote .lenote do caderno ativo
+    val lenoteExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        val nb = notebookToExport
+        if (uri != null && nb != null) {
+            val tempZip = File(context.cacheDir, "temp_export_${nb.id}.lenote")
+            viewModel.exportNotebookPackage(nb.id, tempZip) { success ->
+                if (success && tempZip.exists()) {
+                    try {
+                        tempZip.inputStream().use { inStream ->
+                            context.contentResolver.openOutputStream(uri)?.use { outStream ->
+                                inStream.copyTo(outStream)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    tempZip.delete()
+                }
+            }
+        }
+        notebookToExport = null
     }
 
     Surface(
@@ -542,9 +573,16 @@ fun CollapsibleNavigationSidebar(
                 Text("Importar PDF", fontSize = 11.sp)
             }
 
-            // Rodapé de Backup Local (.lenote)
+            // Exportar Caderno Ativo (.lenote)
             OutlinedButton(
-                onClick = { viewModel.exportBackupLenotePackage() },
+                onClick = {
+                    val currentNb = notebooks.find { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
+                    if (currentNb != null) {
+                        notebookToExport = currentNb
+                        val safeTitle = currentNb.title.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                        lenoteExportLauncher.launch("$safeTitle.lenote")
+                    }
+                },
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -552,16 +590,160 @@ fun CollapsibleNavigationSidebar(
             ) {
                 Icon(
                     imageVector = PhosphorIcons.Regular.Export,
-                    contentDescription = "Exportar backup",
+                    contentDescription = "Exportar caderno",
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Exportar Backup (.lenote)", fontSize = 11.sp)
+                Text("Exportar Caderno (.lenote)", fontSize = 11.sp)
+            }
+
+            // Botão Lixeira
+            OutlinedButton(
+                onClick = { showTrashDialog = true },
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = if (deletedNotebooks.isNotEmpty() || deletedPages.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+            ) {
+                Icon(
+                    imageVector = PhosphorIcons.Regular.Trash,
+                    contentDescription = "Lixeira",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Lixeira (${deletedNotebooks.size + deletedPages.size})",
+                    fontSize = 11.sp
+                )
             }
         }
     }
 
     // Diálogos para Criar / Renomear Caderno, Seção ou Página
+    // Diálogo da Lixeira na Barra Lateral
+    if (showTrashDialog) {
+        AlertDialog(
+            onDismissRequest = { showTrashDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(imageVector = PhosphorIcons.Regular.Trash, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Text("Lixeira do Aplicativo", fontWeight = FontWeight.SemiBold)
+                    }
+                    if (deletedNotebooks.isNotEmpty() || deletedPages.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showEmptyTrashConfirmDialog = true },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Esvaziar", fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            text = {
+                Box(modifier = Modifier.fillMaxWidth().height(360.dp)) {
+                    TrashContent(
+                        deletedNotebooks = deletedNotebooks,
+                        deletedPages = deletedPages,
+                        onRestoreNotebook = { viewModel.restoreNotebookFromTrash(it.id) },
+                        onDeleteNotebookPermanently = { notebookToDeletePermanently = it },
+                        onRestorePage = { viewModel.restorePageFromTrash(it.id) },
+                        onDeletePagePermanently = { pageToDeletePermanently = it }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTrashDialog = false }) {
+                    Text("Fechar")
+                }
+            }
+        )
+    }
+
+    if (showEmptyTrashConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmptyTrashConfirmDialog = false },
+            title = { Text("Esvaziar Lixeira?") },
+            text = { Text("Todos os cadernos e páginas na lixeira serão excluídos permanentemente.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.emptyTrash()
+                        showEmptyTrashConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Esvaziar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEmptyTrashConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (notebookToDeletePermanently != null) {
+        val nb = notebookToDeletePermanently!!
+        AlertDialog(
+            onDismissRequest = { notebookToDeletePermanently = null },
+            title = { Text("Excluir Caderno?") },
+            text = { Text("O caderno '${nb.title}' será excluído definitivamente.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeleteNotebook(nb.id)
+                        notebookToDeletePermanently = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { notebookToDeletePermanently = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (pageToDeletePermanently != null) {
+        val p = pageToDeletePermanently!!
+        AlertDialog(
+            onDismissRequest = { pageToDeletePermanently = null },
+            title = { Text("Excluir Página?") },
+            text = { Text("A página '${p.title}' será excluída definitivamente.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeletePage(p.id)
+                        pageToDeletePermanently = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pageToDeletePermanently = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
     val activeDialog = dialogMode
     if (activeDialog != null) {
         val titleText = when (activeDialog) {
@@ -604,11 +786,11 @@ fun CollapsibleNavigationSidebar(
                     if (activeDialog is SidebarDialogMode.RenameNotebook) {
                         TextButton(
                             onClick = {
-                                viewModel.deleteNotebook(activeDialog.notebook.id)
+                                viewModel.moveNotebookToTrash(activeDialog.notebook.id)
                                 dialogMode = null
                             }
                         ) {
-                            Text("Excluir", color = MaterialTheme.colorScheme.error)
+                            Text("Mover para Lixeira", color = MaterialTheme.colorScheme.error)
                         }
                     } else if (activeDialog is SidebarDialogMode.RenameSection) {
                         TextButton(
@@ -809,7 +991,7 @@ private fun PageListItemCard(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = "Excluir página",
+                                text = "Mover para Lixeira",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.error
                             )

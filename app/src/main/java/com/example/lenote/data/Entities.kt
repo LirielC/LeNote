@@ -11,7 +11,9 @@ data class NotebookEntity(
     val colorHex: Int,
     val createdAt: Long,
     val updatedAt: Long,
-    val sortOrder: Int
+    val sortOrder: Int,
+    val isDeleted: Boolean = false,
+    val deletedAt: Long? = null
 )
 
 /**
@@ -46,5 +48,7 @@ data class PageEntity(
     val updatedAt: Long,
     val sortOrder: Int,
     val pdfPath: String? = null,
-    val pdfPageIndex: Int? = null
+    val pdfPageIndex: Int? = null,
+    val isDeleted: Boolean = false,
+    val deletedAt: Long? = null
 )

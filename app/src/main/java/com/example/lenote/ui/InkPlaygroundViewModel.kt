@@ -18,6 +18,7 @@ import com.example.lenote.data.SectionEntity
 import com.example.lenote.data.ThemeMode
 import com.example.lenote.data.ToolbarDockEdge
 import com.example.lenote.data.WordBoxJsonSerializer
+import com.example.lenote.data.NotebookPackageExporter
 import com.example.lenote.export.ExportResult
 import com.example.lenote.export.PageExporter
 import com.example.lenote.ink.DigitalInkManager
@@ -80,6 +81,12 @@ class InkPlaygroundViewModel : ViewModel() {
 
     private val _favoritePages = MutableStateFlow<List<PageEntity>>(emptyList())
     val favoritePages: StateFlow<List<PageEntity>> = _favoritePages.asStateFlow()
+
+    private val _deletedNotebooks = MutableStateFlow<List<NotebookEntity>>(emptyList())
+    val deletedNotebooks: StateFlow<List<NotebookEntity>> = _deletedNotebooks.asStateFlow()
+
+    private val _deletedPages = MutableStateFlow<List<PageEntity>>(emptyList())
+    val deletedPages: StateFlow<List<PageEntity>> = _deletedPages.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -187,6 +194,20 @@ class InkPlaygroundViewModel : ViewModel() {
         viewModelScope.launch {
             repo.observeAllPages().collectLatest { all ->
                 _allPages.value = all
+            }
+        }
+
+        // Observa cadernos na lixeira
+        viewModelScope.launch {
+            repo.observeDeletedNotebooks().collectLatest { deleted ->
+                _deletedNotebooks.value = deleted
+            }
+        }
+
+        // Observa páginas na lixeira
+        viewModelScope.launch {
+            repo.observeDeletedPages().collectLatest { deleted ->
+                _deletedPages.value = deleted
             }
         }
 
@@ -871,6 +892,100 @@ class InkPlaygroundViewModel : ViewModel() {
                     )
                 )
             }
+        }
+    }
+
+    // --- Operações da Lixeira (Soft Delete, Restauração e Exclusão Definitiva) ---
+
+    fun moveNotebookToTrash(notebookId: String) {
+        val repo = repository ?: return
+        flushCurrentPageSave()
+        repo.moveToTrash(notebookId)
+        val remaining = repo.database.getAllNotebooks().firstOrNull { !it.isDeleted }
+        if (remaining != null) {
+            selectNotebook(remaining.id)
+        }
+        _saveStatusMessage.value = "Caderno movido para a lixeira"
+    }
+
+    fun restoreNotebookFromTrash(notebookId: String) {
+        val repo = repository ?: return
+        repo.restoreFromTrash(notebookId)
+        _saveStatusMessage.value = "Caderno restaurado"
+    }
+
+    fun permanentlyDeleteNotebook(notebookId: String) {
+        val repo = repository ?: return
+        repo.permanentlyDeleteNotebook(notebookId)
+        _saveStatusMessage.value = "Caderno excluído definitivamente"
+    }
+
+    fun movePageToTrash(pageId: String) {
+        val repo = repository ?: return
+        val secId = _selectedSectionId.value ?: return
+        flushCurrentPageSave()
+        repo.movePageToTrash(pageId)
+        if (_currentPage.value?.id == pageId) {
+            val remaining = repo.database.getPagesBySection(secId).firstOrNull { !it.isDeleted }
+            if (remaining != null) {
+                loadPageIntoEngine(remaining)
+            } else {
+                val newPage = repo.createPage(secId, "Página 1", PageBackground.RULED)
+                loadPageIntoEngine(newPage)
+            }
+        }
+        _saveStatusMessage.value = "Página movida para a lixeira"
+    }
+
+    fun restorePageFromTrash(pageId: String) {
+        val repo = repository ?: return
+        repo.restorePageFromTrash(pageId)
+        _saveStatusMessage.value = "Página restaurada"
+    }
+
+    fun permanentlyDeletePage(pageId: String) {
+        val repo = repository ?: return
+        repo.permanentlyDeletePage(pageId)
+        _saveStatusMessage.value = "Página excluída definitivamente"
+    }
+
+    fun emptyTrash() {
+        val repo = repository ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            repo.emptyTrash()
+            withContext(Dispatchers.Main) {
+                _saveStatusMessage.value = "Lixeira esvaziada"
+            }
+        }
+    }
+
+    // --- Exportação e Importação de Pacote de Caderno (.lenote) ---
+
+    fun exportNotebookPackage(notebookId: String, targetFile: File, onComplete: ((Boolean) -> Unit)? = null) {
+        val repo = repository ?: return
+        flushCurrentPageSave()
+        _saveStatusMessage.value = "Exportando caderno..."
+        viewModelScope.launch {
+            val success = NotebookPackageExporter.exportNotebookPackage(notebookId, repo, targetFile)
+            _saveStatusMessage.value = if (success) "Caderno exportado com sucesso!" else "Falha ao exportar caderno"
+            onComplete?.invoke(success)
+        }
+    }
+
+    fun importNotebookPackage(packageFile: File, onComplete: ((NotebookEntity?) -> Unit)? = null) {
+        val repo = repository ?: return
+        val ctx = appContext ?: return
+        flushCurrentPageSave()
+        _saveStatusMessage.value = "Importando caderno..."
+        viewModelScope.launch {
+            val importedNb = NotebookPackageExporter.importNotebookPackage(packageFile, repo, ctx.filesDir)
+            if (importedNb != null) {
+                _saveStatusMessage.value = "Caderno '${importedNb.title}' importado com sucesso!"
+                selectNotebook(importedNb.id)
+            } else {
+                _saveStatusMessage.value = "Falha ao importar caderno .lenote"
+            }
+            onComplete?.invoke(importedNb)
         }
     }
 

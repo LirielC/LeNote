@@ -14,7 +14,10 @@ import kotlinx.coroutines.flow.map
  */
 interface NotebookDao {
     fun observeNotebooks(): Flow<List<NotebookEntity>>
+    fun observeDeletedNotebooks(): Flow<List<NotebookEntity>>
     fun getAllNotebooks(): List<NotebookEntity>
+    fun getDeletedNotebooks(): List<NotebookEntity>
+    fun getAllNotebooksInDb(): List<NotebookEntity>
     fun getNotebookById(id: String): NotebookEntity?
     fun upsertNotebook(notebook: NotebookEntity)
     fun deleteNotebook(id: String)
@@ -39,9 +42,12 @@ interface PageDao {
     fun observePagesBySection(sectionId: String): Flow<List<PageEntity>>
     fun observeAllPages(): Flow<List<PageEntity>>
     fun observeFavoritePages(): Flow<List<PageEntity>>
+    fun observeDeletedPages(): Flow<List<PageEntity>>
     fun searchPages(query: String): Flow<List<PageEntity>>
     fun getPagesBySection(sectionId: String): List<PageEntity>
     fun getAllPages(): List<PageEntity>
+    fun getDeletedPages(): List<PageEntity>
+    fun getAllPagesInDb(): List<PageEntity>
     fun getPageById(id: String): PageEntity?
     fun upsertPage(page: PageEntity)
     fun deletePage(id: String)
@@ -84,7 +90,9 @@ class LeNoteDatabase private constructor(
                         colorHex INTEGER NOT NULL,
                         createdAt INTEGER NOT NULL,
                         updatedAt INTEGER NOT NULL,
-                        sortOrder INTEGER NOT NULL
+                        sortOrder INTEGER NOT NULL,
+                        is_deleted INTEGER NOT NULL DEFAULT 0,
+                        deleted_at INTEGER
                     )
                     """.trimIndent()
                 )
@@ -121,6 +129,8 @@ class LeNoteDatabase private constructor(
                         sortOrder INTEGER NOT NULL,
                         pdf_path TEXT,
                         pdf_page_index INTEGER,
+                        is_deleted INTEGER NOT NULL DEFAULT 0,
+                        deleted_at INTEGER,
                         FOREIGN KEY(sectionId) REFERENCES sections(id) ON DELETE CASCADE
                     )
                     """.trimIndent()
@@ -224,6 +234,14 @@ class LeNoteDatabase private constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS idx_image_blocks_pageId ON page_image_blocks(page_id)")
                     } catch (_: Exception) {}
                 }
+                if (oldVersion < 6) {
+                    try {
+                        db.execSQL("ALTER TABLE notebooks ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+                        db.execSQL("ALTER TABLE notebooks ADD COLUMN deleted_at INTEGER")
+                        db.execSQL("ALTER TABLE pages ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+                        db.execSQL("ALTER TABLE pages ADD COLUMN deleted_at INTEGER")
+                    } catch (_: Exception) {}
+                }
             }
         }
     } else {
@@ -239,8 +257,10 @@ class LeNoteDatabase private constructor(
     private val memImageBlocks = LinkedHashMap<String, CanvasImageBlock>()
 
     private val notebooksFlow = MutableStateFlow<List<NotebookEntity>>(emptyList())
+    private val deletedNotebooksFlow = MutableStateFlow<List<NotebookEntity>>(emptyList())
     private val sectionsFlow = MutableStateFlow<List<SectionEntity>>(emptyList())
     private val pagesFlow = MutableStateFlow<List<PageEntity>>(emptyList())
+    private val deletedPagesFlow = MutableStateFlow<List<PageEntity>>(emptyList())
 
     val notebookDao: NotebookDao get() = this
     val sectionDao: SectionDao get() = this
@@ -256,7 +276,7 @@ class LeNoteDatabase private constructor(
         if (helper != null) {
             val db = helper.writableDatabase
             memNotebooks.clear()
-            db.rawQuery("SELECT id, title, colorHex, createdAt, updatedAt, sortOrder FROM notebooks ORDER BY sortOrder ASC, createdAt ASC", null).use { c ->
+            db.rawQuery("SELECT id, title, colorHex, createdAt, updatedAt, sortOrder, is_deleted, deleted_at FROM notebooks ORDER BY sortOrder ASC, createdAt ASC", null).use { c ->
                 while (c.moveToNext()) {
                     val item = NotebookEntity(
                         id = c.getString(0),
@@ -264,7 +284,9 @@ class LeNoteDatabase private constructor(
                         colorHex = c.getInt(2),
                         createdAt = c.getLong(3),
                         updatedAt = c.getLong(4),
-                        sortOrder = c.getInt(5)
+                        sortOrder = c.getInt(5),
+                        isDeleted = c.getInt(6) != 0,
+                        deletedAt = if (c.isNull(7)) null else c.getLong(7)
                     )
                     memNotebooks[item.id] = item
                 }
@@ -288,7 +310,7 @@ class LeNoteDatabase private constructor(
 
             memPages.clear()
             db.rawQuery(
-                "SELECT id, sectionId, title, pageBackground, zoom, panX, panY, strokesFilePath, thumbnailPath, isFavorite, createdAt, updatedAt, sortOrder, pdf_path, pdf_page_index FROM pages ORDER BY sortOrder ASC, createdAt ASC",
+                "SELECT id, sectionId, title, pageBackground, zoom, panX, panY, strokesFilePath, thumbnailPath, isFavorite, createdAt, updatedAt, sortOrder, pdf_path, pdf_page_index, is_deleted, deleted_at FROM pages ORDER BY sortOrder ASC, createdAt ASC",
                 null
             ).use { c ->
                 while (c.moveToNext()) {
@@ -313,7 +335,9 @@ class LeNoteDatabase private constructor(
                         updatedAt = c.getLong(11),
                         sortOrder = c.getInt(12),
                         pdfPath = if (c.isNull(13)) null else c.getString(13),
-                        pdfPageIndex = if (c.isNull(14)) null else c.getInt(14)
+                        pdfPageIndex = if (c.isNull(14)) null else c.getInt(14),
+                        isDeleted = c.getInt(15) != 0,
+                        deletedAt = if (c.isNull(16)) null else c.getLong(16)
                     )
                     memPages[item.id] = item
                 }
@@ -364,16 +388,27 @@ class LeNoteDatabase private constructor(
         publishFlows()
     }
 
+
+
     private fun publishFlows() {
-        notebooksFlow.value = memNotebooks.values.sortedWith(compareBy<NotebookEntity> { it.sortOrder }.thenBy { it.createdAt })
+        notebooksFlow.value = memNotebooks.values.filter { !it.isDeleted }.sortedWith(compareBy<NotebookEntity> { it.sortOrder }.thenBy { it.createdAt })
+        deletedNotebooksFlow.value = memNotebooks.values.filter { it.isDeleted }.sortedByDescending { it.deletedAt ?: 0L }
         sectionsFlow.value = memSections.values.sortedWith(compareBy<SectionEntity> { it.sortOrder }.thenBy { it.createdAt })
-        pagesFlow.value = memPages.values.sortedWith(compareBy<PageEntity> { it.sortOrder }.thenBy { it.createdAt })
+        pagesFlow.value = memPages.values.filter { !it.isDeleted }.sortedWith(compareBy<PageEntity> { it.sortOrder }.thenBy { it.createdAt })
+        deletedPagesFlow.value = memPages.values.filter { it.isDeleted }.sortedByDescending { it.deletedAt ?: 0L }
     }
 
     override fun observeNotebooks(): Flow<List<NotebookEntity>> = notebooksFlow
+    override fun observeDeletedNotebooks(): Flow<List<NotebookEntity>> = deletedNotebooksFlow
 
     @Synchronized
     override fun getAllNotebooks(): List<NotebookEntity> = notebooksFlow.value
+
+    @Synchronized
+    override fun getDeletedNotebooks(): List<NotebookEntity> = deletedNotebooksFlow.value
+
+    @Synchronized
+    override fun getAllNotebooksInDb(): List<NotebookEntity> = memNotebooks.values.toList()
 
     @Synchronized
     override fun getNotebookById(id: String): NotebookEntity? = memNotebooks[id]
@@ -388,6 +423,8 @@ class LeNoteDatabase private constructor(
                 put("createdAt", notebook.createdAt)
                 put("updatedAt", notebook.updatedAt)
                 put("sortOrder", notebook.sortOrder)
+                put("is_deleted", if (notebook.isDeleted) 1 else 0)
+                if (notebook.deletedAt != null) put("deleted_at", notebook.deletedAt) else putNull("deleted_at")
             }
             db.insertWithOnConflict("notebooks", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         }
@@ -454,6 +491,8 @@ class LeNoteDatabase private constructor(
     override fun observeFavoritePages(): Flow<List<PageEntity>> =
         pagesFlow.map { list -> list.filter { it.isFavorite } }
 
+    override fun observeDeletedPages(): Flow<List<PageEntity>> = deletedPagesFlow
+
     override fun searchPages(query: String): Flow<List<PageEntity>> {
         val trimmed = query.trim().lowercase()
         return pagesFlow.map { list ->
@@ -468,6 +507,12 @@ class LeNoteDatabase private constructor(
 
     @Synchronized
     override fun getAllPages(): List<PageEntity> = pagesFlow.value
+
+    @Synchronized
+    override fun getDeletedPages(): List<PageEntity> = deletedPagesFlow.value
+
+    @Synchronized
+    override fun getAllPagesInDb(): List<PageEntity> = memPages.values.toList()
 
     @Synchronized
     override fun getPageById(id: String): PageEntity? = memPages[id]
@@ -495,6 +540,8 @@ class LeNoteDatabase private constructor(
                 } else {
                     putNull("pdf_page_index")
                 }
+                put("is_deleted", if (page.isDeleted) 1 else 0)
+                if (page.deletedAt != null) put("deleted_at", page.deletedAt) else putNull("deleted_at")
             }
             db.insertWithOnConflict("pages", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         }
@@ -653,7 +700,7 @@ class LeNoteDatabase private constructor(
     }
 
     companion object {
-        private const val DATABASE_VERSION = 5
+        private const val DATABASE_VERSION = 6
 
         @Volatile
         private var INSTANCE: LeNoteDatabase? = null

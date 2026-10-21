@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }

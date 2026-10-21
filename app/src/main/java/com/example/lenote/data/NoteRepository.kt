@@ -24,10 +24,12 @@ class NoteRepository(
 ) {
 
     fun observeNotebooks(): Flow<List<NotebookEntity>> = database.observeNotebooks()
+    fun observeDeletedNotebooks(): Flow<List<NotebookEntity>> = database.observeDeletedNotebooks()
     fun observeSections(notebookId: String): Flow<List<SectionEntity>> = database.observeSectionsByNotebook(notebookId)
     fun observePages(sectionId: String): Flow<List<PageEntity>> = database.observePagesBySection(sectionId)
     fun observeAllPages(): Flow<List<PageEntity>> = database.observeAllPages()
     fun observeFavoritePages(): Flow<List<PageEntity>> = database.observeFavoritePages()
+    fun observeDeletedPages(): Flow<List<PageEntity>> = database.observeDeletedPages()
     fun searchPages(query: String): Flow<List<PageEntity>> = database.searchPages(query)
     fun indexPageHandwriting(pageId: String, text: String, boxesJson: String) = database.indexPageHandwriting(pageId, text, boxesJson)
     fun searchHandwriting(query: String): List<HandwritingSearchResult> = database.searchHandwriting(query)
@@ -104,11 +106,88 @@ class NoteRepository(
         )
     }
 
+
+    // --- Sistema de Lixeira (Soft Delete & Restauração) ---
+
+    @Synchronized
+    fun moveToTrash(notebookId: String) {
+        val nb = database.getNotebookById(notebookId) ?: return
+        val now = System.currentTimeMillis()
+        database.upsertNotebook(nb.copy(isDeleted = true, deletedAt = now))
+
+        // Marca todas as páginas do caderno como excluídas também
+        val sections = database.getSectionsByNotebook(notebookId)
+        for (sec in sections) {
+            val pages = database.getPagesBySection(sec.id)
+            for (p in pages) {
+                database.upsertPage(p.copy(isDeleted = true, deletedAt = now))
+            }
+        }
+    }
+
+    @Synchronized
+    fun restoreFromTrash(notebookId: String) {
+        val nb = database.getNotebookById(notebookId) ?: return
+        database.upsertNotebook(nb.copy(isDeleted = false, deletedAt = null))
+
+        val sections = database.getSectionsByNotebook(notebookId)
+        for (sec in sections) {
+            val pages = database.getAllPagesInDb().filter { it.sectionId == sec.id }
+            for (p in pages) {
+                database.upsertPage(p.copy(isDeleted = false, deletedAt = null))
+            }
+        }
+    }
+
+    @Synchronized
+    fun movePageToTrash(pageId: String) {
+        val page = database.getPageById(pageId) ?: return
+        val now = System.currentTimeMillis()
+        database.upsertPage(page.copy(isDeleted = true, deletedAt = now))
+    }
+
+    @Synchronized
+    fun restorePageFromTrash(pageId: String) {
+        val page = database.getPageById(pageId) ?: return
+        database.upsertPage(page.copy(isDeleted = false, deletedAt = null))
+
+        // Se o caderno pai estiver na lixeira, restaura também
+        val sec = database.getSectionById(page.sectionId)
+        if (sec != null) {
+            val nb = database.getNotebookById(sec.notebookId)
+            if (nb != null && nb.isDeleted) {
+                database.upsertNotebook(nb.copy(isDeleted = false, deletedAt = null))
+            }
+        }
+    }
+
+    @Synchronized
+    fun permanentlyDeleteNotebook(notebookId: String) {
+        deleteNotebook(notebookId)
+    }
+
+    @Synchronized
+    fun permanentlyDeletePage(pageId: String) {
+        deletePage(pageId)
+    }
+
+    @Synchronized
+    fun emptyTrash() {
+        val deletedNotebooks = database.getDeletedNotebooks()
+        for (nb in deletedNotebooks) {
+            deleteNotebook(nb.id)
+        }
+        val deletedPages = database.getDeletedPages()
+        for (p in deletedPages) {
+            deletePage(p.id)
+        }
+    }
+
     @Synchronized
     fun deleteNotebook(notebookId: String) {
         val sections = database.getSectionsByNotebook(notebookId)
         for (sec in sections) {
-            val pages = database.getPagesBySection(sec.id)
+            val pages = database.getAllPagesInDb().filter { it.sectionId == sec.id }
             for (page in pages) {
                 strokeStorage.deletePageFiles(page.id)
             }
@@ -362,6 +441,11 @@ class NoteRepository(
         )
         database.upsertPage(updated)
         return updated
+    }
+
+    @Synchronized
+    fun savePageStrokes(pageId: String, strokesBytes: ByteArray) {
+        strokeStorage.savePageStrokesAtomic(pageId, strokesBytes)
     }
 
     @Synchronized

@@ -36,7 +36,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -110,7 +115,15 @@ fun HomeScreen(
 ) {
     val notebooks by viewModel.notebooks.collectAsState()
     val allPages by viewModel.allPages.collectAsState()
+    val deletedNotebooks by viewModel.deletedNotebooks.collectAsState()
+    val deletedPages by viewModel.deletedPages.collectAsState()
     val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
+
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Cadernos, 1: Lixeira
+    var notebookToExport by remember { mutableStateOf<NotebookEntity?>(null) }
+    var notebookToDeletePermanently by remember { mutableStateOf<NotebookEntity?>(null) }
+    var pageToDeletePermanently by remember { mutableStateOf<PageEntity?>(null) }
+    var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
@@ -140,6 +153,52 @@ fun HomeScreen(
         }
     }
 
+    // Launcher SAF para importar pacote .lenote
+    val lenoteImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val fileName = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "caderno.lenote"
+            val tempFile = File(context.cacheDir, "import_${System.currentTimeMillis()}_$fileName")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inStream ->
+                    FileOutputStream(tempFile).use { outStream ->
+                        inStream.copyTo(outStream)
+                    }
+                }
+                viewModel.importNotebookPackage(tempFile) { importedNb ->
+                    tempFile.delete()
+                    if (importedNb != null) {
+                        onOpenNotebook(importedNb)
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Launcher SAF para exportar pacote .lenote
+    val lenoteExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        val nb = notebookToExport
+        if (uri != null && nb != null) {
+            val tempZip = File(context.cacheDir, "temp_export_${nb.id}.lenote")
+            viewModel.exportNotebookPackage(nb.id, tempZip) { success ->
+                if (success && tempZip.exists()) {
+                    try {
+                        tempZip.inputStream().use { inStream ->
+                            context.contentResolver.openOutputStream(uri)?.use { outStream ->
+                                inStream.copyTo(outStream)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    tempZip.delete()
+                }
+            }
+        }
+        notebookToExport = null
+    }
+
     // Páginas recentes: ordenadas por data de modificação recente (top 5)
     val recentPages = remember(allPages, searchQuery) {
         val sorted = allPages.sortedByDescending { it.updatedAt }
@@ -166,58 +225,113 @@ fun HomeScreen(
             .statusBarsPadding(),
         containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(16.dp)
-            ) {
-                // Botão Importar PDF
-                FloatingActionButton(
-                    onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    shape = CircleShape
+            if (selectedTab == 0) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    // Botão Importar .lenote
+                    FloatingActionButton(
+                        onClick = { lenoteImportLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = CircleShape
                     ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Regular.FilePdf,
-                            contentDescription = "Importar PDF",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Importar PDF",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Export,
+                                contentDescription = "Importar .lenote",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Importar .lenote",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Botão Importar PDF
+                    FloatingActionButton(
+                        onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        shape = CircleShape
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.FilePdf,
+                                contentDescription = "Importar PDF",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Importar PDF",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    // Botão Novo Caderno
+                    FloatingActionButton(
+                        onClick = { showCreateDialog = true },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Plus,
+                                contentDescription = "Novo Caderno",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Novo Caderno",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
-
-                // Botão Novo Caderno
-                FloatingActionButton(
-                    onClick = { showCreateDialog = true },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            } else {
+                // Na aba Lixeira: botão para Esvaziar Lixeira se houver itens
+                if (deletedNotebooks.isNotEmpty() || deletedPages.isNotEmpty()) {
+                    FloatingActionButton(
+                        onClick = { showEmptyTrashConfirmDialog = true },
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        shape = CircleShape,
+                        modifier = Modifier.padding(16.dp)
                     ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Regular.Plus,
-                            contentDescription = "Novo Caderno",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Novo Caderno",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Trash,
+                                contentDescription = "Esvaziar Lixeira",
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Esvaziar Lixeira",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
@@ -243,27 +357,27 @@ fun HomeScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
+                            color = if (selectedTab == 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
                             modifier = Modifier.size(40.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = PhosphorIcons.Regular.Notebook,
+                                    imageVector = if (selectedTab == 0) PhosphorIcons.Regular.Notebook else PhosphorIcons.Regular.Trash,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    tint = if (selectedTab == 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
                         Text(
-                            text = "Meus Cadernos",
+                            text = if (selectedTab == 0) "Meus Cadernos" else "Lixeira",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground
                         )
                     }
                     Text(
-                        text = "${notebooks.size} caderno(s) • ${allPages.size} página(s)",
+                        text = if (selectedTab == 0) "${notebooks.size} caderno(s) • ${allPages.size} página(s)" else "${deletedNotebooks.size} caderno(s) e ${deletedPages.size} página(s) na lixeira",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 50.dp)
@@ -333,6 +447,42 @@ fun HomeScreen(
                 }
             }
 
+            // Abas de Navegação: Cadernos vs Lixeira
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.primary,
+                divider = { HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)) }
+            ) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(imageVector = PhosphorIcons.Regular.Notebook, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("Cadernos (${notebooks.size})", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(imageVector = PhosphorIcons.Regular.Trash, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Text("Lixeira (${deletedNotebooks.size + deletedPages.size})", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                )
+            }
+
+            if (selectedTab == 0) {
             // 2. Seção "Recentes" (Notas editadas recentemente)
             if (recentPages.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -412,11 +562,31 @@ fun HomeScreen(
                                 onClick = {
                                     viewModel.openNotebook(nb.id)
                                     onOpenNotebook(nb)
+                                },
+                                onExport = {
+                                    notebookToExport = nb
+                                    val safeTitle = nb.title.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                                    lenoteExportLauncher.launch("$safeTitle.lenote")
+                                },
+                                onMoveToTrash = {
+                                    viewModel.moveNotebookToTrash(nb.id)
                                 }
                             )
                         }
                     }
                 }
+            }
+            } else {
+                // Conteúdo da Aba Lixeira (Cadernos e Páginas Deletados)
+                TrashContent(
+                    deletedNotebooks = deletedNotebooks,
+                    deletedPages = deletedPages,
+                    onRestoreNotebook = { viewModel.restoreNotebookFromTrash(it.id) },
+                    onDeleteNotebookPermanently = { notebookToDeletePermanently = it },
+                    onRestorePage = { viewModel.restorePageFromTrash(it.id) },
+                    onDeletePagePermanently = { pageToDeletePermanently = it },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -436,6 +606,82 @@ fun HomeScreen(
             }
         )
     }
+
+    // Diálogos de Confirmação da Lixeira
+    if (showEmptyTrashConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmptyTrashConfirmDialog = false },
+            title = { Text("Esvaziar Lixeira?") },
+            text = { Text("Todos os cadernos, seções, páginas e mídias da lixeira serão excluídos definitivamente do dispositivo. Esta ação não pode ser desfeita.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.emptyTrash()
+                        showEmptyTrashConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Esvaziar Definitivamente")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEmptyTrashConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (notebookToDeletePermanently != null) {
+        val nb = notebookToDeletePermanently!!
+        AlertDialog(
+            onDismissRequest = { notebookToDeletePermanently = null },
+            title = { Text("Excluir Caderno Definitivamente?") },
+            text = { Text("O caderno '${nb.title}' e todas as suas páginas serão removidos permanentemente do armazenamento.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeleteNotebook(nb.id)
+                        notebookToDeletePermanently = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { notebookToDeletePermanently = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    if (pageToDeletePermanently != null) {
+        val p = pageToDeletePermanently!!
+        AlertDialog(
+            onDismissRequest = { pageToDeletePermanently = null },
+            title = { Text("Excluir Página Definitivamente?") },
+            text = { Text("A página '${p.title}' será apagada permanentemente.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeletePage(p.id)
+                        pageToDeletePermanently = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Excluir")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pageToDeletePermanently = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
 }
 
 /**
@@ -448,6 +694,8 @@ private fun NotebookCoverCard(
     pageCount: Int,
     sectionCount: Int,
     onClick: () -> Unit,
+    onExport: () -> Unit,
+    onMoveToTrash: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coverColor = Color(notebook.colorHex)
@@ -455,6 +703,7 @@ private fun NotebookCoverCard(
     val lastUpdateStr = remember(notebook.updatedAt) {
         dateFormat.format(Date(notebook.updatedAt))
     }
+    var showMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -491,31 +740,88 @@ private fun NotebookCoverCard(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Etiqueta central estilizada de caderno
+                // Etiqueta central estilizada de caderno com menu ⋯
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Color.White.copy(alpha = 0.95f),
                     shadowElevation = 2.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Text(
-                            text = notebook.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "$sectionCount seções • $pageCount páginas",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontSize = 11.sp,
-                            color = Color(0xFF64748B)
-                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = notebook.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "$sectionCount seções • $pageCount páginas",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+
+                        Box {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.DotsThreeVertical,
+                                    contentDescription = "Opções do caderno",
+                                    tint = Color(0xFF64748B),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Exportar (.lenote)") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.Export,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onExport()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Mover para Lixeira", color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.Trash,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onMoveToTrash()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -765,4 +1071,221 @@ private fun CreateNotebookDialog(
             }
         }
     )
+}
+
+/**
+ * Componente que exibe itens excluídos (Cadernos e Páginas) com opções de Restaurar e Excluir Definitivamente.
+ */
+@Composable
+fun TrashContent(
+    deletedNotebooks: List<NotebookEntity>,
+    deletedPages: List<PageEntity>,
+    onRestoreNotebook: (NotebookEntity) -> Unit,
+    onDeleteNotebookPermanently: (NotebookEntity) -> Unit,
+    onRestorePage: (PageEntity) -> Unit,
+    onDeletePagePermanently: (PageEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+
+    if (deletedNotebooks.isEmpty() && deletedPages.isEmpty()) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(40.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.Trash,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = "A lixeira está vazia",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Itens movidos para a lixeira aparecerão aqui",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else {
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
+            if (deletedNotebooks.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "CADERNOS NA LIXEIRA (${deletedNotebooks.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                items(deletedNotebooks, key = { "nb_${it.id}" }) { nb ->
+                    val delDate = remember(nb.deletedAt) {
+                        nb.deletedAt?.let { dateFormat.format(Date(it)) } ?: "Data desconhecida"
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .background(Color(nb.colorHex), CircleShape)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = nb.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Excluído em: $delDate",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { onRestoreNotebook(nb) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(imageVector = PhosphorIcons.Regular.ArrowCounterClockwise, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Text("Restaurar", fontSize = 12.sp)
+                                    }
+                                }
+                                TextButton(
+                                    onClick = { onDeleteNotebookPermanently(nb) },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Excluir", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (deletedPages.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "PÁGINAS NA LIXEIRA (${deletedPages.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
+                items(deletedPages, key = { "pg_${it.id}" }) { page ->
+                    val delDate = remember(page.deletedAt) {
+                        page.deletedAt?.let { dateFormat.format(Date(it)) } ?: "Data desconhecida"
+                    }
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.FileText,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = page.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Excluído em: $delDate",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = { onRestorePage(page) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(imageVector = PhosphorIcons.Regular.ArrowCounterClockwise, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Text("Restaurar", fontSize = 12.sp)
+                                    }
+                                }
+                                TextButton(
+                                    onClick = { onDeletePagePermanently(page) },
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Text("Excluir", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
