@@ -53,10 +53,20 @@ interface PageDao {
  * Banco de dados SQLite local do LeNote com suporte a chaves estrangeiras em cascata (`ON DELETE CASCADE`)
  * e emissão reativa via [Flow] para atualização instantânea da UI.
  */
+
+interface MediaBlockDao {
+    fun getTextBlocksByPage(pageId: String): List<CanvasTextBlock>
+    fun getImageBlocksByPage(pageId: String): List<CanvasImageBlock>
+    fun upsertTextBlock(block: CanvasTextBlock)
+    fun deleteTextBlock(id: String)
+    fun upsertImageBlock(block: CanvasImageBlock)
+    fun deleteImageBlock(id: String)
+}
+
 class LeNoteDatabase private constructor(
     context: Context?,
     dbName: String? = "lenote.db"
-) : NotebookDao, SectionDao, PageDao {
+) : NotebookDao, SectionDao, PageDao, MediaBlockDao {
 
     private val sqliteHelper: SQLiteOpenHelper? = if (context != null) {
         object : SQLiteOpenHelper(context.applicationContext, dbName, null, DATABASE_VERSION) {
@@ -117,6 +127,43 @@ class LeNoteDatabase private constructor(
                 )
                 db.execSQL("CREATE INDEX idx_pages_sectionId ON pages(sectionId)")
                 try { db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS page_search_index USING fts5(page_id UNINDEXED, recognized_text, bounding_boxes_json UNINDEXED)") } catch (_: Exception) {}
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS page_text_blocks (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        page_id TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        x REAL NOT NULL,
+                        y REAL NOT NULL,
+                        width REAL NOT NULL,
+                        height REAL NOT NULL,
+                        textColor INTEGER NOT NULL,
+                        fontSize REAL NOT NULL,
+                        zIndex REAL NOT NULL,
+                        FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_blocks_pageId ON page_text_blocks(page_id)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS page_image_blocks (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        page_id TEXT NOT NULL,
+                        imagePath TEXT NOT NULL,
+                        x REAL NOT NULL,
+                        y REAL NOT NULL,
+                        width REAL NOT NULL,
+                        height REAL NOT NULL,
+                        rotationDegrees REAL NOT NULL,
+                        zIndex REAL NOT NULL,
+                        FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_image_blocks_pageId ON page_image_blocks(page_id)")
+
             }
 
             override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -137,6 +184,46 @@ class LeNoteDatabase private constructor(
                         db.execSQL("ALTER TABLE pages ADD COLUMN pdf_page_index INTEGER")
                     } catch (_: Exception) {}
                 }
+                if (oldVersion < 5) {
+                    try {
+                        db.execSQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS page_text_blocks (
+                                id TEXT PRIMARY KEY NOT NULL,
+                                page_id TEXT NOT NULL,
+                                text TEXT NOT NULL,
+                                x REAL NOT NULL,
+                                y REAL NOT NULL,
+                                width REAL NOT NULL,
+                                height REAL NOT NULL,
+                                textColor INTEGER NOT NULL,
+                                fontSize REAL NOT NULL,
+                                zIndex REAL NOT NULL,
+                                FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+                            )
+                            """.trimIndent()
+                        )
+                        db.execSQL("CREATE INDEX IF NOT EXISTS idx_text_blocks_pageId ON page_text_blocks(page_id)")
+
+                        db.execSQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS page_image_blocks (
+                                id TEXT PRIMARY KEY NOT NULL,
+                                page_id TEXT NOT NULL,
+                                imagePath TEXT NOT NULL,
+                                x REAL NOT NULL,
+                                y REAL NOT NULL,
+                                width REAL NOT NULL,
+                                height REAL NOT NULL,
+                                rotationDegrees REAL NOT NULL,
+                                zIndex REAL NOT NULL,
+                                FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+                            )
+                            """.trimIndent()
+                        )
+                        db.execSQL("CREATE INDEX IF NOT EXISTS idx_image_blocks_pageId ON page_image_blocks(page_id)")
+                    } catch (_: Exception) {}
+                }
             }
         }
     } else {
@@ -148,6 +235,8 @@ class LeNoteDatabase private constructor(
     private val memSections = LinkedHashMap<String, SectionEntity>()
     private val memPages = LinkedHashMap<String, PageEntity>()
     private val memHandwritingIndex = LinkedHashMap<String, Pair<String, String>>()
+    private val memTextBlocks = LinkedHashMap<String, CanvasTextBlock>()
+    private val memImageBlocks = LinkedHashMap<String, CanvasImageBlock>()
 
     private val notebooksFlow = MutableStateFlow<List<NotebookEntity>>(emptyList())
     private val sectionsFlow = MutableStateFlow<List<SectionEntity>>(emptyList())
@@ -229,7 +318,49 @@ class LeNoteDatabase private constructor(
                     memPages[item.id] = item
                 }
             }
+
+            memTextBlocks.clear()
+            try {
+                db.rawQuery("SELECT id, page_id, text, x, y, width, height, textColor, fontSize, zIndex FROM page_text_blocks", null).use { c ->
+                    while (c.moveToNext()) {
+                        val tb = CanvasTextBlock(
+                            id = c.getString(0),
+                            pageId = c.getString(1),
+                            text = c.getString(2),
+                            x = c.getFloat(3),
+                            y = c.getFloat(4),
+                            width = c.getFloat(5),
+                            height = c.getFloat(6),
+                            textColor = c.getInt(7),
+                            fontSize = c.getFloat(8),
+                            zIndex = c.getFloat(9)
+                        )
+                        memTextBlocks[tb.id] = tb
+                    }
+                }
+            } catch (_: Exception) {}
+
+            memImageBlocks.clear()
+            try {
+                db.rawQuery("SELECT id, page_id, imagePath, x, y, width, height, rotationDegrees, zIndex FROM page_image_blocks", null).use { c ->
+                    while (c.moveToNext()) {
+                        val ib = CanvasImageBlock(
+                            id = c.getString(0),
+                            pageId = c.getString(1),
+                            imagePath = c.getString(2),
+                            x = c.getFloat(3),
+                            y = c.getFloat(4),
+                            width = c.getFloat(5),
+                            height = c.getFloat(6),
+                            rotationDegrees = c.getFloat(7),
+                            zIndex = c.getFloat(8)
+                        )
+                        memImageBlocks[ib.id] = ib
+                    }
+                }
+            } catch (_: Exception) {}
         }
+
         publishFlows()
     }
 
@@ -381,6 +512,8 @@ class LeNoteDatabase private constructor(
         }
         memPages.remove(id)
         memHandwritingIndex.remove(id)
+        memTextBlocks.values.filter { it.pageId == id }.map { it.id }.forEach { memTextBlocks.remove(it) }
+        memImageBlocks.values.filter { it.pageId == id }.map { it.id }.forEach { memImageBlocks.remove(it) }
         publishFlows()
     }
 
@@ -448,13 +581,79 @@ class LeNoteDatabase private constructor(
         return results
     }
 
+
+    @Synchronized
+    override fun getTextBlocksByPage(pageId: String): List<CanvasTextBlock> {
+        return memTextBlocks.values.filter { it.pageId == pageId }.sortedBy { it.zIndex }
+    }
+
+    @Synchronized
+    override fun getImageBlocksByPage(pageId: String): List<CanvasImageBlock> {
+        return memImageBlocks.values.filter { it.pageId == pageId }.sortedBy { it.zIndex }
+    }
+
+    @Synchronized
+    override fun upsertTextBlock(block: CanvasTextBlock) {
+        sqliteHelper?.writableDatabase?.let { db ->
+            val cv = ContentValues().apply {
+                put("id", block.id)
+                put("page_id", block.pageId)
+                put("text", block.text)
+                put("x", block.x)
+                put("y", block.y)
+                put("width", block.width)
+                put("height", block.height)
+                put("textColor", block.textColor)
+                put("fontSize", block.fontSize)
+                put("zIndex", block.zIndex)
+            }
+            db.insertWithOnConflict("page_text_blocks", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+        memTextBlocks[block.id] = block
+    }
+
+    @Synchronized
+    override fun deleteTextBlock(id: String) {
+        sqliteHelper?.writableDatabase?.let { db ->
+            db.delete("page_text_blocks", "id = ?", arrayOf(id))
+        }
+        memTextBlocks.remove(id)
+    }
+
+    @Synchronized
+    override fun upsertImageBlock(block: CanvasImageBlock) {
+        sqliteHelper?.writableDatabase?.let { db ->
+            val cv = ContentValues().apply {
+                put("id", block.id)
+                put("page_id", block.pageId)
+                put("imagePath", block.imagePath)
+                put("x", block.x)
+                put("y", block.y)
+                put("width", block.width)
+                put("height", block.height)
+                put("rotationDegrees", block.rotationDegrees)
+                put("zIndex", block.zIndex)
+            }
+            db.insertWithOnConflict("page_image_blocks", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        }
+        memImageBlocks[block.id] = block
+    }
+
+    @Synchronized
+    override fun deleteImageBlock(id: String) {
+        sqliteHelper?.writableDatabase?.let { db ->
+            db.delete("page_image_blocks", "id = ?", arrayOf(id))
+        }
+        memImageBlocks.remove(id)
+    }
+
     @Synchronized
     fun close() {
         sqliteHelper?.close()
     }
 
     companion object {
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
 
         @Volatile
         private var INSTANCE: LeNoteDatabase? = null

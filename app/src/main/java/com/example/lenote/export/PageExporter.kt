@@ -1,5 +1,12 @@
 package com.example.lenote.export
 
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.graphics.BitmapFactory
+import com.example.lenote.data.CanvasTextBlock
+import com.example.lenote.data.CanvasImageBlock
+
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -215,7 +222,9 @@ object PageExporter {
         headerTitle: String? = null,
         isDarkMode: Boolean = false,
         pdfPath: String? = null,
-        pdfPageIndex: Int? = null
+        pdfPageIndex: Int? = null,
+        textBlocks: List<CanvasTextBlock> = emptyList(),
+        imageBlocks: List<CanvasImageBlock> = emptyList()
     ) {
         val paperBgColor = if (isDarkMode) {
             com.example.lenote.ink.ColorInversionHelper.getPaperBackgroundColor(true)
@@ -273,6 +282,51 @@ object PageExporter {
                 )
             }
 
+            // 1. Renderiza Imagens no Canvas
+            for (img in imageBlocks.sortedBy { it.zIndex }) {
+                val file = File(img.imagePath)
+                if (file.exists()) {
+                    val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                    if (bmp != null) {
+                        val imgSave = targetCanvas.save()
+                        try {
+                            targetCanvas.translate(img.x + img.width / 2f, img.y + img.height / 2f)
+                            targetCanvas.rotate(img.rotationDegrees)
+                            val srcR = android.graphics.Rect(0, 0, bmp.width, bmp.height)
+                            val dstR = android.graphics.RectF(-img.width / 2f, -img.height / 2f, img.width / 2f, img.height / 2f)
+                            targetCanvas.drawBitmap(bmp, srcR, dstR, Paint(Paint.FILTER_BITMAP_FLAG))
+                        } finally {
+                            targetCanvas.restoreToCount(imgSave)
+                            bmp.recycle()
+                        }
+                    }
+                }
+            }
+
+            // 2. Renderiza Caixas de Texto com StaticLayout
+            for (tb in textBlocks.sortedBy { it.zIndex }) {
+                if (tb.text.isNotBlank()) {
+                    val txtPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = tb.textColor
+                        textSize = tb.fontSize
+                    }
+                    val blockW = max(10, tb.width.toInt())
+                    val layout = StaticLayout.Builder.obtain(tb.text, 0, tb.text.length, txtPaint, blockW)
+                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                        .setIncludePad(false)
+                        .build()
+
+                    val txtSave = targetCanvas.save()
+                    try {
+                        targetCanvas.translate(tb.x, tb.y)
+                        layout.draw(targetCanvas)
+                    } finally {
+                        targetCanvas.restoreToCount(txtSave)
+                    }
+                }
+            }
+
+            // 3. Renderiza traços de tinta sobrepostos
             for (stroke in strokes) {
                 renderer.draw(targetCanvas, stroke, transform)
             }
@@ -444,7 +498,9 @@ object PageExporter {
         height: Int = 2133,
         isDarkMode: Boolean = false,
         pdfPath: String? = null,
-        pdfPageIndex: Int? = null
+        pdfPageIndex: Int? = null,
+        textBlocks: List<CanvasTextBlock> = emptyList(),
+        imageBlocks: List<CanvasImageBlock> = emptyList()
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "png")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -461,7 +517,9 @@ object PageExporter {
             headerTitle = null,
             isDarkMode = isDarkMode,
             pdfPath = pdfPath,
-            pdfPageIndex = pdfPageIndex
+            pdfPageIndex = pdfPageIndex,
+            textBlocks = textBlocks,
+            imageBlocks = imageBlocks
         )
 
         // Grava no arquivo local (garantindo acesso offline e compatibilidade com testes)
@@ -502,7 +560,9 @@ object PageExporter {
         pageHeightPt: Int = 1600,
         isDarkMode: Boolean = false,
         pdfPath: String? = null,
-        pdfPageIndex: Int? = null
+        pdfPageIndex: Int? = null,
+        textBlocks: List<CanvasTextBlock> = emptyList(),
+        imageBlocks: List<CanvasImageBlock> = emptyList()
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "pdf")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -522,7 +582,9 @@ object PageExporter {
                 headerTitle = null,
                 isDarkMode = isDarkMode,
                 pdfPath = pdfPath,
-                pdfPageIndex = pdfPageIndex
+                pdfPageIndex = pdfPageIndex,
+                textBlocks = textBlocks,
+                imageBlocks = imageBlocks
             )
             pdfDoc.finishPage(pdfPage)
 

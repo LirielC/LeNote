@@ -8,6 +8,8 @@ import com.example.lenote.data.AppPreferences
 import com.example.lenote.data.HandwritingSearchResult
 import com.example.lenote.data.LeNoteDatabase
 import com.example.lenote.data.NoteRepository
+import com.example.lenote.data.CanvasTextBlock
+import com.example.lenote.data.CanvasImageBlock
 import com.example.lenote.data.NotebookEntity
 import com.example.lenote.data.PageEntity
 import com.example.lenote.data.PageStrokeStorage
@@ -99,6 +101,15 @@ class InkPlaygroundViewModel : ViewModel() {
 
     private val _currentPage = MutableStateFlow<PageEntity?>(null)
     val currentPage: StateFlow<PageEntity?> = _currentPage.asStateFlow()
+
+    private val _textBlocks = MutableStateFlow<List<CanvasTextBlock>>(emptyList())
+    val textBlocks: StateFlow<List<CanvasTextBlock>> = _textBlocks.asStateFlow()
+
+    private val _imageBlocks = MutableStateFlow<List<CanvasImageBlock>>(emptyList())
+    val imageBlocks: StateFlow<List<CanvasImageBlock>> = _imageBlocks.asStateFlow()
+
+    private val _isTextToolActive = MutableStateFlow(false)
+    val isTextToolActive: StateFlow<Boolean> = _isTextToolActive.asStateFlow()
 
     private val _isSidebarOpen = MutableStateFlow(false)
     val isSidebarOpen: StateFlow<Boolean> = _isSidebarOpen.asStateFlow()
@@ -254,6 +265,10 @@ class InkPlaygroundViewModel : ViewModel() {
         suppressAutoSaveUntilContentVersion = engine.state.value.contentVersion
         _currentPage.value = page
         _savedStrokesData.value = if (bytes.isNotEmpty()) bytes else null
+
+        // Carrega blocos de mídia da página
+        _textBlocks.value = repo.getTextBlocks(page.id)
+        _imageBlocks.value = repo.getImageBlocks(page.id)
     }
 
     private fun scheduleAutoSave() {
@@ -393,6 +408,78 @@ class InkPlaygroundViewModel : ViewModel() {
         val repo = repository ?: return 0
         val secs = repo.database.getSectionsByNotebook(notebookId)
         return secs.sumOf { repo.database.getPagesBySection(it.id).size }
+    }
+
+
+    // --- Métodos de Manipulação de Blocos de Mídia (Texto & Imagem) ---
+
+    fun setTextToolActive(active: Boolean) {
+        _isTextToolActive.value = active
+    }
+
+    fun addTextBlock(worldX: Float, worldY: Float, initialText: String = "") {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        val block = CanvasTextBlock(
+            id = java.util.UUID.randomUUID().toString(),
+            pageId = curPage.id,
+            text = initialText,
+            x = worldX,
+            y = worldY,
+            width = 240f,
+            height = 60f,
+            textColor = 0xFF0F172A.toInt(),
+            fontSize = 16f,
+            zIndex = (_textBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
+        )
+        repo.upsertTextBlock(block)
+        _textBlocks.value = repo.getTextBlocks(curPage.id)
+    }
+
+    fun updateTextBlock(block: CanvasTextBlock) {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        repo.upsertTextBlock(block)
+        _textBlocks.value = repo.getTextBlocks(curPage.id)
+    }
+
+    fun deleteTextBlock(blockId: String) {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        repo.deleteTextBlock(blockId)
+        _textBlocks.value = repo.getTextBlocks(curPage.id)
+    }
+
+    fun addImageBlock(imageFile: File, worldX: Float = 100f, worldY: Float = 100f) {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        val block = CanvasImageBlock(
+            id = java.util.UUID.randomUUID().toString(),
+            pageId = curPage.id,
+            imagePath = imageFile.absolutePath,
+            x = worldX,
+            y = worldY,
+            width = 300f,
+            height = 300f,
+            rotationDegrees = 0f,
+            zIndex = (_imageBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
+        )
+        repo.upsertImageBlock(block)
+        _imageBlocks.value = repo.getImageBlocks(curPage.id)
+    }
+
+    fun updateImageBlock(block: CanvasImageBlock) {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        repo.upsertImageBlock(block)
+        _imageBlocks.value = repo.getImageBlocks(curPage.id)
+    }
+
+    fun deleteImageBlock(blockId: String) {
+        val curPage = _currentPage.value ?: return
+        val repo = repository ?: return
+        repo.deleteImageBlock(blockId)
+        _imageBlocks.value = repo.getImageBlocks(curPage.id)
     }
 
     fun importPdfDocument(title: String, pdfFile: File, onComplete: ((NotebookEntity) -> Unit)? = null) {
@@ -717,7 +804,9 @@ class InkPlaygroundViewModel : ViewModel() {
                         strokes,
                         isDarkMode = exportDark,
                         pdfPath = cur?.pdfPath,
-                        pdfPageIndex = cur?.pdfPageIndex
+                        pdfPageIndex = cur?.pdfPageIndex,
+                        textBlocks = _textBlocks.value,
+                        imageBlocks = _imageBlocks.value
                     )
                 }
                 _saveStatusMessage.value = result.userMessage
@@ -759,7 +848,9 @@ class InkPlaygroundViewModel : ViewModel() {
                         strokes,
                         isDarkMode = exportDark,
                         pdfPath = cur?.pdfPath,
-                        pdfPageIndex = cur?.pdfPageIndex
+                        pdfPageIndex = cur?.pdfPageIndex,
+                        textBlocks = _textBlocks.value,
+                        imageBlocks = _imageBlocks.value
                     )
                 }
                 _saveStatusMessage.value = result.userMessage

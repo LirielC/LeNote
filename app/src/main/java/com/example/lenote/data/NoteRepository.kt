@@ -279,6 +279,27 @@ class NoteRepository(
         }
     }
 
+
+    // --- Gerenciamento de Mídia Rica (Texto e Imagem) ---
+
+    @Synchronized
+    fun getTextBlocks(pageId: String): List<CanvasTextBlock> = database.getTextBlocksByPage(pageId)
+
+    @Synchronized
+    fun getImageBlocks(pageId: String): List<CanvasImageBlock> = database.getImageBlocksByPage(pageId)
+
+    @Synchronized
+    fun upsertTextBlock(block: CanvasTextBlock) = database.upsertTextBlock(block)
+
+    @Synchronized
+    fun deleteTextBlock(id: String) = database.deleteTextBlock(id)
+
+    @Synchronized
+    fun upsertImageBlock(block: CanvasImageBlock) = database.upsertImageBlock(block)
+
+    @Synchronized
+    fun deleteImageBlock(id: String) = database.deleteImageBlock(id)
+
     @Synchronized
     fun deletePage(pageId: String) {
         strokeStorage.deletePageFiles(pageId)

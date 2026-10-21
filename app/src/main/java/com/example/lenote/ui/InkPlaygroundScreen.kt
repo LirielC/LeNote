@@ -1,5 +1,10 @@
 package com.example.lenote.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import java.io.FileOutputStream
+
 import android.content.ActivityNotFoundException
 import android.widget.FrameLayout
 import androidx.compose.animation.AnimatedVisibility
@@ -159,6 +164,27 @@ fun InkPlaygroundScreen(
     val vmPages = viewModel?.pages?.collectAsState()
     val vmIsSidebarOpen = viewModel?.isSidebarOpen?.collectAsState()
     val vmIsDiagnosticsVisible = viewModel?.isDiagnosticsVisible?.collectAsState()
+    val textBlocks by (viewModel?.textBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+    val imageBlocks by (viewModel?.imageBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+    val isTextToolActive by (viewModel?.isTextToolActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+
+    // Photo picker para inserção de imagem na folha
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            val imagesDir = File(context.filesDir, "images").apply { mkdirs() }
+            val targetFile = File(imagesDir, "img_${System.currentTimeMillis()}.png")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inStream ->
+                    FileOutputStream(targetFile).use { outStream ->
+                        inStream.copyTo(outStream)
+                    }
+                }
+                viewModel?.addImageBlock(targetFile, 150f, 150f)
+            } catch (_: Exception) {}
+        }
+    }
 
     var localSavedStrokesData by remember { mutableStateOf<ByteArray?>(null) }
     var localSaveStatusMessage by remember { mutableStateOf<String?>(null) }
@@ -206,6 +232,23 @@ fun InkPlaygroundScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // Camada Interativa de Mídia Rica (Caixas de Texto e Imagens)
+                CanvasMediaOverlay(
+                    engine = engine,
+                    textBlocks = textBlocks,
+                    imageBlocks = imageBlocks,
+                    isTextToolActive = isTextToolActive,
+                    onAddTextBlock = { x, y ->
+                        viewModel?.addTextBlock(x, y)
+                        viewModel?.setTextToolActive(false)
+                    },
+                    onUpdateTextBlock = { viewModel?.updateTextBlock(it) },
+                    onDeleteTextBlock = { viewModel?.deleteTextBlock(it) },
+                    onUpdateImageBlock = { viewModel?.updateImageBlock(it) },
+                    onDeleteImageBlock = { viewModel?.deleteImageBlock(it) },
+                    modifier = Modifier.fillMaxSize()
+                )
+
                 // B) HEADER COMPACTO: Pequeno, discreto (48dp), sem competir com "Página 1"
                 CompactHeaderBar(
                     currentPage = currentPage,
@@ -230,6 +273,12 @@ fun InkPlaygroundScreen(
                 // C) TOOLBAR FLUTUANTE COMPACTA & PAINÉIS CONTEXTUAIS
                 ToolbarOverlayStateHost(
                     engine = engine,
+                    viewModel = viewModel,
+                    onInsertImage = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
                     onSave = { strokeCount ->
                         if (viewModel != null) {
                             viewModel.saveCurrentStrokes()
@@ -842,6 +891,8 @@ private fun DiagnosticsOverlayStateHost(
 @Composable
 private fun ToolbarOverlayStateHost(
     engine: JetpackInkEngine,
+    viewModel: InkPlaygroundViewModel? = null,
+    onInsertImage: () -> Unit = {},
     onSave: (Int) -> Unit,
     onLoad: () -> Unit,
     canLoad: Boolean,
@@ -863,9 +914,20 @@ private fun ToolbarOverlayStateHost(
     }
     val state by toolbarStateFlow.collectAsState(initial = engine.state.value)
 
+    val isTextActive by (viewModel?.isTextToolActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+
     ToolbarOverlay(
         state = state,
-        onToolSelect = { engine.setTool(it) },
+        onToolSelect = {
+            viewModel?.setTextToolActive(false)
+            engine.setTool(it)
+        },
+        isTextActive = isTextActive,
+        onToggleText = {
+            val next = !isTextActive
+            viewModel?.setTextToolActive(next)
+        },
+        onInsertImage = { onInsertImage() },
         onEraserSizeSelect = { engine.setEraserSize(it) },
         onPageBackgroundSelect = { engine.setPageBackground(it) },
         onSmoothingSelect = { engine.setSmoothingLevel(it) },
@@ -1102,6 +1164,9 @@ fun ToolbarOverlay(
     onSave: () -> Unit,
     onLoad: () -> Unit,
     canLoad: Boolean,
+    isTextActive: Boolean = false,
+    onToggleText: () -> Unit = {},
+    onInsertImage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val penColors = listOf(
@@ -1240,6 +1305,24 @@ fun ToolbarOverlay(
                             onToolSelect(InkingTool.Lasso)
                             activeContextualPanel = ContextualPanelType.NONE
                         }
+                    )
+
+                    // Caixa de Texto
+                    ToolbarToolButton(
+                        iconRegular = PhosphorIcons.Regular.TextT,
+                        iconFill = PhosphorIcons.Regular.TextT,
+                        contentDescription = "Texto",
+                        isSelected = isTextActive,
+                        onClick = onToggleText
+                    )
+
+                    // Inserir Imagem
+                    ToolbarToolButton(
+                        iconRegular = PhosphorIcons.Regular.Image,
+                        iconFill = PhosphorIcons.Regular.Image,
+                        contentDescription = "Inserir Imagem",
+                        isSelected = false,
+                        onClick = onInsertImage
                     )
                 }
 
