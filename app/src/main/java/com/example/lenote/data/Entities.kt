@@ -44,5 +44,7 @@ data class PageEntity(
     val isFavorite: Boolean = false,
     val createdAt: Long,
     val updatedAt: Long,
-    val sortOrder: Int
+    val sortOrder: Int,
+    val pdfPath: String? = null,
+    val pdfPageIndex: Int? = null
 )

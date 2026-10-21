@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -143,7 +144,8 @@ data class ExportConfirmationState(
 @Composable
 fun InkPlaygroundScreen(
     viewModel: InkPlaygroundViewModel? = null,
-    engine: JetpackInkEngine = viewModel?.engine ?: remember { JetpackInkEngine() }
+    engine: JetpackInkEngine = viewModel?.engine ?: remember { JetpackInkEngine() },
+    onNavigateBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     LaunchedEffect(viewModel) {
@@ -209,6 +211,10 @@ fun InkPlaygroundScreen(
                     currentPage = currentPage,
                     isSaving = isSaving,
                     saveStatus = saveStatusMessage,
+                    onNavigateBack = {
+                        viewModel?.flushCurrentPageSave()
+                        onNavigateBack?.invoke()
+                    },
                     onToggleSidebar = { viewModel?.toggleSidebar() },
                     onRenamePageClick = {
                         renamePageInput = currentPage?.title ?: "Página 1"
@@ -249,7 +255,8 @@ fun InkPlaygroundScreen(
                     onPromptClear = { showClearConfirmDialog = true },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 54.dp)
+                        .statusBarsPadding()
+                        .padding(top = 58.dp)
                 )
 
                 // D) TELEMETRIA & DIAGNÓSTICO (Opcional, ativável em Mais Opções -> Diagnósticos)
@@ -649,6 +656,7 @@ private fun CompactHeaderBar(
     currentPage: PageEntity?,
     isSaving: Boolean,
     saveStatus: String?,
+    onNavigateBack: (() -> Unit)?,
     onToggleSidebar: () -> Unit,
     onRenamePageClick: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -656,9 +664,11 @@ private fun CompactHeaderBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.height(48.dp),
+        modifier = modifier
+            .statusBarsPadding()
+            .height(52.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        shadowElevation = 2.dp
     ) {
         Row(
             modifier = Modifier
@@ -672,6 +682,20 @@ private fun CompactHeaderBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (onNavigateBack != null) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.CaretLeft,
+                            contentDescription = "Voltar para Biblioteca",
+                            tint = Color(0xFF1E3A8A),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
                 Surface(
                     onClick = onToggleSidebar,
                     shape = RoundedCornerShape(8.dp),
@@ -1128,23 +1152,21 @@ fun ToolbarOverlay(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Dock Principal da Toolbar Flutuante
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White.copy(alpha = 0.97f)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+        // Dock Principal da Toolbar Flutuante (Estilo Floating Island)
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+            shadowElevation = 6.dp,
+            tonalElevation = 2.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Grupo 1: Ferramentas Principais de Desenho
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Caneta
                     ToolbarToolButton(
@@ -1233,7 +1255,7 @@ fun ToolbarOverlay(
                 // Grupo 2: Ações de Histórico (Desfazer / Refazer)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     IconButton(
                         onClick = onUndo,
@@ -1243,8 +1265,8 @@ fun ToolbarOverlay(
                         Icon(
                             imageVector = PhosphorIcons.Regular.ArrowCounterClockwise,
                             contentDescription = "Desfazer",
-                            tint = if (state.canUndo) Color(0xFF0F172A) else Color(0xFFCBD5E1),
-                            modifier = Modifier.size(24.dp)
+                            tint = if (state.canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
@@ -1256,8 +1278,8 @@ fun ToolbarOverlay(
                         Icon(
                             imageVector = PhosphorIcons.Regular.ArrowClockwise,
                             contentDescription = "Refazer",
-                            tint = if (state.canRedo) Color(0xFF0F172A) else Color(0xFFCBD5E1),
-                            modifier = Modifier.size(24.dp)
+                            tint = if (state.canRedo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -1555,17 +1577,16 @@ private fun ToolbarToolButton(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = if (isSelected) Color(0xFFEEF2FF) else Color.Transparent,
-        border = if (isSelected) BorderStroke(1.5.dp, Color(0xFF2563EB)) else null,
+        shape = CircleShape,
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
         modifier = Modifier.size(44.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = if (isSelected) iconFill else iconRegular,
                 contentDescription = contentDescription,
-                tint = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF475569),
-                modifier = Modifier.size(24.dp)
+                tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
             )
 
             // Indicador sutil de cor ativa (pontinho na base do ícone)
@@ -1573,7 +1594,7 @@ private fun ToolbarToolButton(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 3.dp)
+                        .padding(bottom = 4.dp)
                         .size(5.dp)
                         .background(badgeColor, CircleShape)
                         .border(0.5.dp, Color.White, CircleShape)

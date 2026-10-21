@@ -1,6 +1,10 @@
 package com.example.lenote.ui
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import java.io.FileOutputStream
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -36,7 +41,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -88,14 +97,38 @@ fun CollapsibleNavigationSidebar(
     val searchResults by viewModel.searchResults.collectAsState()
     val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
 
+    val context = LocalContext.current
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var dialogMode by remember { mutableStateOf<SidebarDialogMode?>(null) }
     var dialogInputText by remember { mutableStateOf("") }
 
+    // Launcher SAF para importar documento PDF
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            val fileName = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "Documento.pdf"
+            val cleanName = if (fileName.endsWith(".pdf", ignoreCase = true)) fileName else "$fileName.pdf"
+            val pdfsDir = File(context.filesDir, "pdfs").apply { mkdirs() }
+            val targetFile = File(pdfsDir, "pdf_${System.currentTimeMillis()}_$cleanName")
+
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inStream ->
+                    FileOutputStream(targetFile).use { outStream ->
+                        inStream.copyTo(outStream)
+                    }
+                }
+                val title = cleanName.removeSuffix(".pdf")
+                viewModel.importPdfDocument(title, targetFile)
+            } catch (_: Exception) {}
+        }
+    }
+
     Surface(
         modifier = modifier
             .width(330.dp)
-            .fillMaxHeight(),
+            .fillMaxHeight()
+            .statusBarsPadding(),
         color = Color(0xFFFDFDFE),
         tonalElevation = 2.dp,
         shadowElevation = 8.dp
@@ -142,40 +175,67 @@ fun CollapsibleNavigationSidebar(
                 }
             }
 
-            // Campo de Busca Rápida de Páginas
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                leadingIcon = {
+            // Campo de Busca Rápida de Páginas (Alinhamento Vertical e Contraste Aprimorados)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.MagnifyingGlass,
                         contentDescription = "Buscar",
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(16.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
                     )
-                },
-                trailingIcon = {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "Buscar páginas...",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                            )
+                        }
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { viewModel.updateSearchQuery(it) },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     if (searchQuery.isNotBlank()) {
                         IconButton(
                             onClick = { viewModel.updateSearchQuery("") },
-                            modifier = Modifier.size(26.dp)
+                            modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.X,
                                 contentDescription = "Limpar busca",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
-                },
-                placeholder = { Text("Buscar páginas...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
-                singleLine = true,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-            )
+                }
+            }
 
             if (searchQuery.isNotBlank()) {
                 Text(
@@ -244,23 +304,20 @@ fun CollapsibleNavigationSidebar(
                             )
                         }
 
-                        // Ação principal evidente: + Caderno
-                        OutlinedButton(
+                        // Ação minimalista: + Caderno
+                        IconButton(
                             onClick = {
                                 dialogInputText = ""
                                 dialogMode = SidebarDialogMode.CreateNotebook
                             },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
+                                contentDescription = "Novo caderno",
+                                tint = Color(0xFF1E3A8A),
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Caderno", fontSize = 11.sp)
                         }
                     }
                 }
@@ -273,17 +330,10 @@ fun CollapsibleNavigationSidebar(
                         val isSelected = nb.id == selectedNotebookId
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
+                            color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { viewModel.selectNotebook(nb.id) }
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -344,23 +394,20 @@ fun CollapsibleNavigationSidebar(
                             )
                         }
 
-                        // Ação principal evidente: + Seção
-                        OutlinedButton(
+                        // Ação minimalista: + Seção
+                        IconButton(
                             onClick = {
                                 dialogInputText = ""
                                 dialogMode = SidebarDialogMode.CreateSection
                             },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
+                                contentDescription = "Nova seção",
+                                tint = Color(0xFF1E3A8A),
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Seção", fontSize = 11.sp)
                         }
                     }
                 }
@@ -373,17 +420,10 @@ fun CollapsibleNavigationSidebar(
                         val isSelected = sec.id == selectedSectionId
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
+                            color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { viewModel.selectSection(sec.id) }
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
-                                    } else {
-                                        Modifier
-                                    }
-                                )
                         ) {
                             Text(
                                 text = sec.title,
@@ -484,6 +524,23 @@ fun CollapsibleNavigationSidebar(
             }
 
             HorizontalDivider(color = Color(0xFFE2E8F0))
+
+            // Ação de Importar PDF
+            OutlinedButton(
+                onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+            ) {
+                Icon(
+                    imageVector = PhosphorIcons.Regular.FilePdf,
+                    contentDescription = "Importar PDF",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Importar PDF", fontSize = 11.sp)
+            }
 
             // Rodapé de Backup Local (.lenote)
             OutlinedButton(
@@ -613,17 +670,10 @@ private fun PageListItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .clickable { onSelect() }
-            .then(
-                if (isSelected) {
-                    Modifier.border(1.5.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
-                } else {
-                    Modifier.border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                }
-            ),
+            .clickable { onSelect() },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF8FAFC)
+            containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
         )
     ) {
         Row(

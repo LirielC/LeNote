@@ -213,7 +213,9 @@ object PageExporter {
         background: PageBackground,
         strokes: List<Stroke>,
         headerTitle: String? = null,
-        isDarkMode: Boolean = false
+        isDarkMode: Boolean = false,
+        pdfPath: String? = null,
+        pdfPageIndex: Int? = null
     ) {
         val paperBgColor = if (isDarkMode) {
             com.example.lenote.ink.ColorInversionHelper.getPaperBackgroundColor(true)
@@ -244,16 +246,32 @@ object PageExporter {
         val saveCount = targetCanvas.save()
         try {
             targetCanvas.concat(transform)
-            drawBackgroundInWorld(
-                canvas = targetCanvas,
-                background = background,
-                worldLeft = worldLeft,
-                worldTop = worldTop,
-                worldRight = worldLeft + worldW,
-                worldBottom = worldTop + worldH,
-                scale = scale,
-                isDarkMode = isDarkMode
-            )
+            var drewPdf = false
+            if (!pdfPath.isNullOrBlank() && pdfPageIndex != null && File(pdfPath).exists()) {
+                val pdfBmp = com.example.lenote.pdf.PdfPageRenderer.getCachedBitmap(pdfPath, pdfPageIndex, 2.0f)
+                    ?: kotlinx.coroutines.runBlocking {
+                        com.example.lenote.pdf.PdfPageRenderer.renderPage(pdfPath, pdfPageIndex, 2.0f)
+                    }
+                if (pdfBmp != null && !pdfBmp.isRecycled) {
+                    val srcRect = android.graphics.Rect(0, 0, pdfBmp.width, pdfBmp.height)
+                    val dstRect = android.graphics.RectF(0f, 0f, 1200f, 1600f)
+                    targetCanvas.drawBitmap(pdfBmp, srcRect, dstRect, Paint(Paint.FILTER_BITMAP_FLAG))
+                    drewPdf = true
+                }
+            }
+
+            if (!drewPdf) {
+                drawBackgroundInWorld(
+                    canvas = targetCanvas,
+                    background = background,
+                    worldLeft = worldLeft,
+                    worldTop = worldTop,
+                    worldRight = worldLeft + worldW,
+                    worldBottom = worldTop + worldH,
+                    scale = scale,
+                    isDarkMode = isDarkMode
+                )
+            }
 
             for (stroke in strokes) {
                 renderer.draw(targetCanvas, stroke, transform)
@@ -275,7 +293,9 @@ object PageExporter {
         background: PageBackground,
         strokes: List<Stroke>,
         width: Int = 240,
-        height: Int = 320
+        height: Int = 320,
+        pdfPath: String? = null,
+        pdfPageIndex: Int? = null
     ): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
@@ -285,7 +305,9 @@ object PageExporter {
             targetHeight = height,
             background = background,
             strokes = strokes,
-            headerTitle = null
+            headerTitle = null,
+            pdfPath = pdfPath,
+            pdfPageIndex = pdfPageIndex
         )
         return bmp
     }
@@ -420,7 +442,9 @@ object PageExporter {
         strokes: List<Stroke>,
         width: Int = 1600,
         height: Int = 2133,
-        isDarkMode: Boolean = false
+        isDarkMode: Boolean = false,
+        pdfPath: String? = null,
+        pdfPageIndex: Int? = null
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "png")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -435,7 +459,9 @@ object PageExporter {
             background = background,
             strokes = strokes,
             headerTitle = null,
-            isDarkMode = isDarkMode
+            isDarkMode = isDarkMode,
+            pdfPath = pdfPath,
+            pdfPageIndex = pdfPageIndex
         )
 
         // Grava no arquivo local (garantindo acesso offline e compatibilidade com testes)
@@ -474,7 +500,9 @@ object PageExporter {
         strokes: List<Stroke>,
         pageWidthPt: Int = 1200,
         pageHeightPt: Int = 1600,
-        isDarkMode: Boolean = false
+        isDarkMode: Boolean = false,
+        pdfPath: String? = null,
+        pdfPageIndex: Int? = null
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "pdf")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -492,7 +520,9 @@ object PageExporter {
                 background = background,
                 strokes = strokes,
                 headerTitle = null,
-                isDarkMode = isDarkMode
+                isDarkMode = isDarkMode,
+                pdfPath = pdfPath,
+                pdfPageIndex = pdfPageIndex
             )
             pdfDoc.finishPage(pdfPage)
 
@@ -549,7 +579,9 @@ object PageExporter {
                     background = bg,
                     strokes = strokes,
                     headerTitle = null,
-                    isDarkMode = isDarkMode
+                    isDarkMode = isDarkMode,
+                    pdfPath = pageEntity.pdfPath,
+                    pdfPageIndex = pageEntity.pdfPageIndex
                 )
                 pdfDoc.finishPage(pdfPage)
             }
@@ -575,6 +607,29 @@ object PageExporter {
             uri = mediaUri,
             fileName = fileName,
             userMessage = userMessage
+        )
+    }
+
+
+    /**
+     * Exporta todas as páginas de um Caderno para um único documento `.pdf` multipágina via MediaStore.
+     * Preserva as páginas originais de PDF com anotações sobrepostas em alta fidelidade.
+     */
+    fun exportNotebookToPdf(
+        context: Context,
+        notebookTitle: String,
+        pagesWithStrokes: List<Pair<PageEntity, List<Stroke>>>,
+        pageWidthPt: Int = 1200,
+        pageHeightPt: Int = 1600,
+        isDarkMode: Boolean = false
+    ): ExportResult {
+        return exportSectionToPdf(
+            context = context,
+            sectionTitle = notebookTitle,
+            pagesWithStrokes = pagesWithStrokes,
+            pageWidthPt = pageWidthPt,
+            pageHeightPt = pageHeightPt,
+            isDarkMode = isDarkMode
         )
     }
 
