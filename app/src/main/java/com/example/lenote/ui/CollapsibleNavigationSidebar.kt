@@ -1,892 +1,1231 @@
-package com.example.lenote.ui
-
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.example.lenote.data.NotebookEntity
-import com.example.lenote.data.PageEntity
-import com.example.lenote.data.SectionEntity
-import com.example.lenote.ink.PageBackground
-import java.io.File
-
-/**
- * Painel lateral recolhível (`CollapsibleNavigationSidebar`) para tablets:
- * - Largura reduzida para ~330dp, funcionando como um navegador limpo de páginas;
- * - Botões discretos de edição para Cadernos e Seções;
- * - Miniaturas de página realistas (renderizam traços ou o padrão da folha nativo);
- * - Lista de páginas simplificada (thumbnail + título + tipo de folha + favorito);
- * - Ações secundárias (Mover e Excluir) agrupadas no menu contextual "⋯".
- */
-@Composable
-fun CollapsibleNavigationSidebar(
-    viewModel: InkPlaygroundViewModel,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val notebooks by viewModel.notebooks.collectAsState()
-    val sections by viewModel.sections.collectAsState()
-    val pages by viewModel.pages.collectAsState()
-    val favoritePages by viewModel.favoritePages.collectAsState()
-    val selectedNotebookId by viewModel.selectedNotebookId.collectAsState()
-    val selectedSectionId by viewModel.selectedSectionId.collectAsState()
-    val currentPage by viewModel.currentPage.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
-    val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
-
-    var showFavoritesOnly by remember { mutableStateOf(false) }
-    var dialogMode by remember { mutableStateOf<SidebarDialogMode?>(null) }
-    var dialogInputText by remember { mutableStateOf("") }
-
-    Surface(
-        modifier = modifier
-            .width(330.dp)
-            .fillMaxHeight(),
-        color = Color(0xFFFDFDFE),
-        tonalElevation = 2.dp,
-        shadowElevation = 8.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxHeight()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Cabeçalho do Navegador de Páginas
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Fill.Notebook,
-                        contentDescription = "Cadernos",
-                        tint = Color(0xFF1E3A8A),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Cadernos & Páginas",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.X,
-                        contentDescription = "Fechar painel",
-                        tint = Color(0xFF475569),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            // Campo de Busca Rápida de Páginas
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.MagnifyingGlass,
-                        contentDescription = "Buscar",
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(16.dp)
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotBlank()) {
-                        IconButton(
-                            onClick = { viewModel.updateSearchQuery("") },
-                            modifier = Modifier.size(26.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.X,
-                                contentDescription = "Limpar busca",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                },
-                placeholder = { Text("Buscar páginas...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
-                singleLine = true,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-            )
-
-            if (searchQuery.isNotBlank()) {
-                Text(
-                    text = "Resultados (${searchResults.size})",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF475569)
-                )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(searchResults, key = { it.id }) { page ->
-                        PageListItemCard(
-                            page = page,
-                            isSelected = currentPage?.id == page.id,
-                            thumbnailFile = viewModel.getThumbnailFile(page.id),
-                            thumbnailVersion = thumbnailVersion,
-                            onSelect = { viewModel.selectPage(page) },
-                            onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
-                            onRename = {
-                                dialogInputText = page.title
-                                dialogMode = SidebarDialogMode.RenamePage(page)
-                            },
-                            onDuplicate = { viewModel.duplicatePage(page.id) },
-                            onMoveUp = {},
-                            onMoveDown = {},
-                            onDelete = { viewModel.deletePage(page.id) },
-                            showReorderButtons = false
-                        )
-                    }
-                }
-            } else {
-                // 1. Seção de Cadernos (Notebooks)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "CADERNOS (${notebooks.size})",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Ação de editar discreta (ícone lápis)
-                        IconButton(
-                            onClick = {
-                                val curNb = notebooks.find { it.id == selectedNotebookId }
-                                if (curNb != null) {
-                                    dialogInputText = curNb.title
-                                    dialogMode = SidebarDialogMode.RenameNotebook(curNb)
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.PencilSimple,
-                                contentDescription = "Renomear caderno",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Ação principal evidente: + Caderno
-                        OutlinedButton(
-                            onClick = {
-                                dialogInputText = ""
-                                dialogMode = SidebarDialogMode.CreateNotebook
-                            },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Caderno", fontSize = 11.sp)
-                        }
-                    }
-                }
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(notebooks, key = { it.id }) { nb ->
-                        val isSelected = nb.id == selectedNotebookId
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectNotebook(nb.id) }
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .background(Color(nb.colorHex), CircleShape)
-                                )
-                                Text(
-                                    text = nb.title,
-                                    fontSize = 11.sp,
-                                    color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                // 2. Seção de Divisórias / Seções (Sections)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "SEÇÕES (${sections.size})",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Ação de editar discreta (ícone lápis)
-                        IconButton(
-                            onClick = {
-                                val curSec = sections.find { it.id == selectedSectionId }
-                                if (curSec != null) {
-                                    dialogInputText = curSec.title
-                                    dialogMode = SidebarDialogMode.RenameSection(curSec)
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.PencilSimple,
-                                contentDescription = "Renomear seção",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Ação principal evidente: + Seção
-                        OutlinedButton(
-                            onClick = {
-                                dialogInputText = ""
-                                dialogMode = SidebarDialogMode.CreateSection
-                            },
-                            shape = RoundedCornerShape(6.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Seção", fontSize = 11.sp)
-                        }
-                    }
-                }
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(sections, key = { it.id }) { sec ->
-                        val isSelected = sec.id == selectedSectionId
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectSection(sec.id) }
-                                .then(
-                                    if (isSelected) {
-                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        ) {
-                            Text(
-                                text = sec.title,
-                                fontSize = 11.sp,
-                                color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                // 3. Seção de Páginas (Pages) + Filtro de Favoritas
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (showFavoritesOnly) "FAVORITAS (${favoritePages.size})" else "PÁGINAS (${pages.size})",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B)
-                        )
-                        TextButton(
-                            onClick = { showFavoritesOnly = !showFavoritesOnly },
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 1.dp),
-                            modifier = Modifier.height(26.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (showFavoritesOnly) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                                contentDescription = "Filtrar favoritas",
-                                tint = if (showFavoritesOnly) Color(0xFFD97706) else Color(0xFF64748B),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = if (showFavoritesOnly) "Todas" else "Favoritas",
-                                fontSize = 10.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
-
-                    // Ação principal evidente: + Página
-                    Button(
-                        onClick = { viewModel.createNewPage() },
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                        modifier = Modifier.height(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1E3A8A),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Regular.Plus,
-                            contentDescription = "Nova página",
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("Página", fontSize = 11.sp)
-                    }
-                }
-
-                val displayedPages = if (showFavoritesOnly) favoritePages else pages
-
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(displayedPages, key = { it.id }) { page ->
-                        PageListItemCard(
-                            page = page,
-                            isSelected = currentPage?.id == page.id,
-                            thumbnailFile = viewModel.getThumbnailFile(page.id),
-                            thumbnailVersion = thumbnailVersion,
-                            onSelect = { viewModel.selectPage(page) },
-                            onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
-                            onRename = {
-                                dialogInputText = page.title
-                                dialogMode = SidebarDialogMode.RenamePage(page)
-                            },
-                            onDuplicate = { viewModel.duplicatePage(page.id) },
-                            onMoveUp = { viewModel.movePageOrder(page.id, moveUp = true) },
-                            onMoveDown = { viewModel.movePageOrder(page.id, moveUp = false) },
-                            onDelete = { viewModel.deletePage(page.id) },
-                            showReorderButtons = !showFavoritesOnly
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // Rodapé de Backup Local (.lenote)
-            OutlinedButton(
-                onClick = { viewModel.exportBackupLenotePackage() },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Export,
-                    contentDescription = "Exportar backup",
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Exportar Backup (.lenote)", fontSize = 11.sp)
-            }
-        }
-    }
-
-    // Diálogos para Criar / Renomear Caderno, Seção ou Página
-    val activeDialog = dialogMode
-    if (activeDialog != null) {
-        val titleText = when (activeDialog) {
-            is SidebarDialogMode.CreateNotebook -> "Novo Caderno"
-            is SidebarDialogMode.RenameNotebook -> "Renomear Caderno"
-            is SidebarDialogMode.CreateSection -> "Nova Seção"
-            is SidebarDialogMode.RenameSection -> "Renomear Seção"
-            is SidebarDialogMode.RenamePage -> "Renomear Página"
-        }
-
-        AlertDialog(
-            onDismissRequest = { dialogMode = null },
-            title = { Text(titleText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
-            text = {
-                OutlinedTextField(
-                    value = dialogInputText,
-                    onValueChange = { dialogInputText = it },
-                    singleLine = true,
-                    placeholder = { Text("Digite o nome...") }
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        when (activeDialog) {
-                            is SidebarDialogMode.CreateNotebook -> viewModel.createNewNotebook(dialogInputText)
-                            is SidebarDialogMode.RenameNotebook -> viewModel.renameNotebook(activeDialog.notebook.id, dialogInputText)
-                            is SidebarDialogMode.CreateSection -> viewModel.createNewSection(dialogInputText)
-                            is SidebarDialogMode.RenameSection -> viewModel.renameSection(activeDialog.section.id, dialogInputText)
-                            is SidebarDialogMode.RenamePage -> viewModel.renamePage(activeDialog.page.id, dialogInputText)
-                        }
-                        dialogMode = null
-                    }
-                ) {
-                    Text("Confirmar")
-                }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (activeDialog is SidebarDialogMode.RenameNotebook) {
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteNotebook(activeDialog.notebook.id)
-                                dialogMode = null
-                            }
-                        ) {
-                            Text("Excluir", color = MaterialTheme.colorScheme.error)
-                        }
-                    } else if (activeDialog is SidebarDialogMode.RenameSection) {
-                        TextButton(
-                            onClick = {
-                                viewModel.deleteSection(activeDialog.section.id)
-                                dialogMode = null
-                            }
-                        ) {
-                            Text("Excluir", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    TextButton(onClick = { dialogMode = null }) {
-                        Text("Cancelar")
-                    }
-                }
-            }
-        )
-    }
-}
-
-private sealed interface SidebarDialogMode {
-    data object CreateNotebook : SidebarDialogMode
-    data class RenameNotebook(val notebook: NotebookEntity) : SidebarDialogMode
-    data object CreateSection : SidebarDialogMode
-    data class RenameSection(val section: SectionEntity) : SidebarDialogMode
-    data class RenamePage(val page: PageEntity) : SidebarDialogMode
-}
-
-/**
- * Item de página limpo e elegante com miniatura realista, título, tipo de folha, favorito
- * e menu contextual "⋯" para ações secundárias (Mover e Excluir).
- */
-@Composable
-private fun PageListItemCard(
-    page: PageEntity,
-    isSelected: Boolean,
-    thumbnailFile: File?,
-    thumbnailVersion: Long,
-    onSelect: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onRename: () -> Unit,
-    onDuplicate: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onDelete: () -> Unit,
-    showReorderButtons: Boolean
-) {
-    var isContextMenuOpen by remember { mutableStateOf(false) }
-
-    val thumbBitmap = remember(page.id, page.updatedAt, thumbnailVersion) {
-        if (thumbnailFile != null && thumbnailFile.exists()) {
-            runCatching { BitmapFactory.decodeFile(thumbnailFile.absolutePath)?.asImageBitmap() }.getOrNull()
-        } else {
-            null
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable { onSelect() }
-            .then(
-                if (isSelected) {
-                    Modifier.border(1.5.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
-                } else {
-                    Modifier.border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                }
-            ),
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF8FAFC)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // 1. Miniatura da Página (Thumbnail de alta qualidade com padrão de folha ou traços)
-            PageThumbnailPreview(
-                pageBackground = page.pageBackground,
-                bitmap = thumbBitmap,
-                modifier = Modifier.size(width = 46.dp, height = 62.dp)
-            )
-
-            // 2. Metadados Principais (Título + Tipo de Folha)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = page.title,
-                    fontSize = 12.sp,
-                    color = Color(0xFF0F172A),
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = page.pageBackground.label,
-                    fontSize = 10.sp,
-                    color = Color(0xFF64748B)
-                )
-            }
-
-            // 3. Botão de Favorito Direto
-            IconButton(
-                onClick = onToggleFavorite,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(
-                    imageVector = if (page.isFavorite) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                    contentDescription = if (page.isFavorite) "Desfavoritar" else "Favoritar",
-                    tint = if (page.isFavorite) Color(0xFFD97706) else Color(0xFF94A3B8),
-                    modifier = Modifier.size(15.dp)
-                )
-            }
-
-            // 4. Menu Contextual "⋯" para Ações Secundárias (Renomear, Duplicar, Mover e Excluir)
-            Box {
-                IconButton(
-                    onClick = { isContextMenuOpen = true },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.DotsThreeVertical,
-                        contentDescription = "Mais ações da página",
-                        tint = Color(0xFF64748B),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = isContextMenuOpen,
-                    onDismissRequest = { isContextMenuOpen = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Renomear", fontSize = 12.sp) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.PencilSimple,
-                                contentDescription = null,
-                                tint = Color(0xFF475569),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            isContextMenuOpen = false
-                            onRename()
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = { Text("Duplicar", fontSize = 12.sp) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Copy,
-                                contentDescription = null,
-                                tint = Color(0xFF475569),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            isContextMenuOpen = false
-                            onDuplicate()
-                        }
-                    )
-
-                    if (showReorderButtons) {
-                        DropdownMenuItem(
-                            text = { Text("Mover para cima", fontSize = 12.sp) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = PhosphorIcons.Regular.CaretUp,
-                                    contentDescription = null,
-                                    tint = Color(0xFF475569),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            onClick = {
-                                isContextMenuOpen = false
-                                onMoveUp()
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Mover para baixo", fontSize = 12.sp) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = PhosphorIcons.Regular.CaretDown,
-                                    contentDescription = null,
-                                    tint = Color(0xFF475569),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            onClick = {
-                                isContextMenuOpen = false
-                                onMoveDown()
-                            }
-                        )
-                    }
-
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "Excluir página",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Trash,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        onClick = {
-                            isContextMenuOpen = false
-                            onDelete()
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Renderização gráfica de miniatura com proporção de folha real.
- * Renderiza os traços salvos (se disponíveis) ou o padrão da folha (pautada, quadriculada, etc.) nativamente.
- */
-@Composable
-private fun PageThumbnailPreview(
-    pageBackground: PageBackground,
-    bitmap: androidx.compose.ui.graphics.ImageBitmap?,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(4.dp),
-        color = Color(0xFFFCFCFA),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
-        shadowElevation = 1.dp
-    ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val lineColor = Color(0xFF94A3B8).copy(alpha = 0.6f)
-                when (pageBackground) {
-                    PageBackground.BLANK -> {
-                        // Folha em branco
-                    }
-                    PageBackground.RULED -> {
-                        val spacing = size.height / 6f
-                        for (i in 1..5) {
-                            val y = i * spacing
-                            drawLine(
-                                color = lineColor,
-                                start = Offset(3f, y),
-                                end = Offset(size.width - 3f, y),
-                                strokeWidth = 0.8f
-                            )
-                        }
-                    }
-                    PageBackground.GRID -> {
-                        val spacingX = size.width / 5f
-                        val spacingY = size.height / 6f
-                        for (i in 1 until 5) {
-                            val x = i * spacingX
-                            drawLine(
-                                color = lineColor.copy(alpha = 0.4f),
-                                start = Offset(x, 2f),
-                                end = Offset(x, size.height - 2f),
-                                strokeWidth = 0.6f
-                            )
-                        }
-                        for (i in 1 until 6) {
-                            val y = i * spacingY
-                            drawLine(
-                                color = lineColor.copy(alpha = 0.4f),
-                                start = Offset(2f, y),
-                                end = Offset(size.width - 2f, y),
-                                strokeWidth = 0.6f
-                            )
-                        }
-                    }
-                    PageBackground.DOTS -> {
-                        val spacingX = size.width / 4.5f
-                        val spacingY = size.height / 6f
-                        for (i in 1..3) {
-                            for (j in 1..5) {
-                                drawCircle(
-                                    color = lineColor,
-                                    radius = 0.9f,
-                                    center = Offset(i * spacingX, j * spacingY)
-                                )
-                            }
-                        }
-                    }
-                    PageBackground.MATHEMATICS -> {
-                        val spacing = size.height / 7f
-                        for (i in 1..6) {
-                            val y = i * spacing
-                            val isAxis = i == 3
-                            drawLine(
-                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
-                                start = Offset(2f, y),
-                                end = Offset(size.width - 2f, y),
-                                strokeWidth = if (isAxis) 1.0f else 0.5f
-                            )
-                        }
-                        val spacingX = size.width / 5f
-                        for (i in 1..4) {
-                            val x = i * spacingX
-                            val isAxis = i == 2
-                            drawLine(
-                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
-                                start = Offset(x, 2f),
-                                end = Offset(x, size.height - 2f),
-                                strokeWidth = if (isAxis) 1.0f else 0.5f
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+package com.example.lenote.ui
+
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.lenote.data.NotebookEntity
+import com.example.lenote.data.PageEntity
+import com.example.lenote.data.SectionEntity
+import com.example.lenote.ink.PageBackground
+import java.io.File
+
+/**
+ * Painel lateral recolhível (`CollapsibleNavigationSidebar`) para tablets:
+ * - Largura reduzida para ~330dp, funcionando como um navegador limpo de páginas;
+ * - Botões discretos de edição para Cadernos e Seções;
+ * - Miniaturas de página realistas (renderizam traços ou o padrão da folha nativo);
+ * - Lista de páginas simplificada (thumbnail + título + tipo de folha + favorito);
+ * - Ações secundárias (Mover e Excluir) agrupadas no menu contextual "⋯".
+ */
+@Composable
+fun CollapsibleNavigationSidebar(
+    viewModel: InkPlaygroundViewModel,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val notebooks by viewModel.notebooks.collectAsState()
+    val sections by viewModel.sections.collectAsState()
+    val pages by viewModel.pages.collectAsState()
+    val favoritePages by viewModel.favoritePages.collectAsState()
+    val selectedNotebookId by viewModel.selectedNotebookId.collectAsState()
+    val selectedSectionId by viewModel.selectedSectionId.collectAsState()
+    val currentPage by viewModel.currentPage.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val searchResults by viewModel.searchResults.collectAsState()
+    val handwritingSearchResults by viewModel.handwritingSearchResults.collectAsState()
+    val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
+    val isGridView by viewModel.isSidebarGridView.collectAsState()
+
+    var showFavoritesOnly by remember { mutableStateOf(false) }
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    var dialogMode by remember { mutableStateOf<SidebarDialogMode?>(null) }
+    var dialogInputText by remember { mutableStateOf("") }
+
+    Surface(
+        modifier = modifier
+            .width(330.dp)
+            .fillMaxHeight(),
+        color = Color(0xFFFDFDFE),
+        tonalElevation = 2.dp,
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Cabeçalho do Navegador de Páginas
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = PhosphorIcons.Fill.Notebook,
+                        contentDescription = "Cadernos",
+                        tint = Color(0xFF1E3A8A),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Cadernos & Páginas",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0F172A)
+                    )
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(30.dp)
+                ) {
+                    Icon(
+                        imageVector = PhosphorIcons.Regular.X,
+                        contentDescription = "Fechar painel",
+                        tint = Color(0xFF475569),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Campo de Busca Rápida de Páginas
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.updateSearchQuery(it) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = PhosphorIcons.Regular.MagnifyingGlass,
+                        contentDescription = "Buscar",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotBlank()) {
+                        IconButton(
+                            onClick = { viewModel.updateSearchQuery("") },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.X,
+                                contentDescription = "Limpar busca",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                },
+                placeholder = { Text("Buscar páginas...", fontSize = 12.sp, color = Color(0xFF94A3B8)) },
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp)
+            )
+
+            if (searchQuery.isNotBlank()) {
+                val totalResults = searchResults.size + handwritingSearchResults.size
+                Text(
+                    text = "Resultados ($totalResults)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF475569)
+                )
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (searchResults.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "TÍTULOS (${searchResults.size})",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B),
+                                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+                            )
+                        }
+                        items(searchResults, key = { "title_" + it.id }) { page ->
+                            PageListItemCard(
+                                page = page,
+                                isSelected = currentPage?.id == page.id,
+                                thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                thumbnailVersion = thumbnailVersion,
+                                onSelect = { viewModel.selectPage(page) },
+                                onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                onRename = {
+                                    dialogInputText = page.title
+                                    dialogMode = SidebarDialogMode.RenamePage(page)
+                                },
+                                onDuplicate = { viewModel.duplicatePage(page.id) },
+                                onMoveUp = {},
+                                onMoveDown = {},
+                                onDelete = { viewModel.deletePage(page.id) },
+                                showReorderButtons = false
+                            )
+                        }
+                    }
+                    if (handwritingSearchResults.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "ESCRITA MANUAL (${handwritingSearchResults.size})",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E3A8A),
+                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                            )
+                        }
+                        items(handwritingSearchResults, key = { "hw_" + it.page.id }) { res ->
+                            val page = res.page
+                            val matchedBoxes = res.matchedWordBoxes.map { it.toRectF() }
+                            PageListItemCard(
+                                page = page,
+                                isSelected = currentPage?.id == page.id,
+                                thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                thumbnailVersion = thumbnailVersion,
+                                onSelect = { viewModel.selectSearchResult(page, matchedBoxes) },
+                                onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                onRename = {
+                                    dialogInputText = page.title
+                                    dialogMode = SidebarDialogMode.RenamePage(page)
+                                },
+                                onDuplicate = { viewModel.duplicatePage(page.id) },
+                                onMoveUp = {},
+                                onMoveDown = {},
+                                onDelete = { viewModel.deletePage(page.id) },
+                                showReorderButtons = false
+                            )
+                        }
+                    }
+                }
+            } else {
+                // 1. Seção de Cadernos (Notebooks)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "CADERNOS (${notebooks.size})",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Ação de editar discreta (ícone lápis)
+                        IconButton(
+                            onClick = {
+                                val curNb = notebooks.find { it.id == selectedNotebookId }
+                                if (curNb != null) {
+                                    dialogInputText = curNb.title
+                                    dialogMode = SidebarDialogMode.RenameNotebook(curNb)
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.PencilSimple,
+                                contentDescription = "Renomear caderno",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        // Ação principal evidente: + Caderno
+                        OutlinedButton(
+                            onClick = {
+                                dialogInputText = ""
+                                dialogMode = SidebarDialogMode.CreateNotebook
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Plus,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Caderno", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(notebooks, key = { it.id }) { nb ->
+                        val isSelected = nb.id == selectedNotebookId
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.selectNotebook(nb.id) }
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .background(Color(nb.colorHex), CircleShape)
+                                )
+                                Text(
+                                    text = nb.title,
+                                    fontSize = 11.sp,
+                                    color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                // 2. Seção de Divisórias / Seções (Sections)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SEÇÕES (${sections.size})",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF64748B)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Ação de editar discreta (ícone lápis)
+                        IconButton(
+                            onClick = {
+                                val curSec = sections.find { it.id == selectedSectionId }
+                                if (curSec != null) {
+                                    dialogInputText = curSec.title
+                                    dialogMode = SidebarDialogMode.RenameSection(curSec)
+                                }
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.PencilSimple,
+                                contentDescription = "Renomear seção",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+
+                        // Ação principal evidente: + Seção
+                        OutlinedButton(
+                            onClick = {
+                                dialogInputText = ""
+                                dialogMode = SidebarDialogMode.CreateSection
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Plus,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Seção", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(sections, key = { it.id }) { sec ->
+                        val isSelected = sec.id == selectedSectionId
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF1F5F9),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { viewModel.selectSection(sec.id) }
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(1.dp, Color(0xFF3B82F6), RoundedCornerShape(8.dp))
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            Text(
+                                text = sec.title,
+                                fontSize = 11.sp,
+                                color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                // 3. Seção de Páginas (Pages) + Filtro de Favoritas
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (showFavoritesOnly) "FAVORITAS (${favoritePages.size})" else "PÁGINAS (${pages.size})",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B)
+                        )
+                        TextButton(
+                            onClick = { showFavoritesOnly = !showFavoritesOnly },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 1.dp),
+                            modifier = Modifier.height(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (showFavoritesOnly) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
+                                contentDescription = "Filtrar favoritas",
+                                tint = if (showFavoritesOnly) Color(0xFFD97706) else Color(0xFF64748B),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (showFavoritesOnly) "Todas" else "Favoritas",
+                                fontSize = 10.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+
+                        // Alternância entre Lista e Grade (Grid View)
+                        IconButton(
+                            onClick = { viewModel.toggleSidebarGridView() },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isGridView) PhosphorIcons.Regular.ListDashes else PhosphorIcons.Regular.SquaresFour,
+                                contentDescription = if (isGridView) "Visualização em Lista" else "Visualização em Grade",
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    // Ação principal evidente: + Página
+                    Button(
+                        onClick = { viewModel.createNewPage() },
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E3A8A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.Plus,
+                            contentDescription = "Nova página",
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Página", fontSize = 11.sp)
+                    }
+                }
+
+                val displayedPages = if (showFavoritesOnly) favoritePages else pages
+
+                if (isGridView) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        itemsIndexed(displayedPages, key = { _, p -> p.id }) { index, page ->
+                            val isDragging = draggingIndex == index
+                            Box(
+                                modifier = Modifier
+                                    .zIndex(if (isDragging) 10f else 1f)
+                                    .offset {
+                                        if (isDragging) IntOffset(0, dragOffsetY.roundToInt())
+                                        else IntOffset.Zero
+                                    }
+                                    .pointerInput(page.id, showFavoritesOnly) {
+                                        if (!showFavoritesOnly) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    draggingIndex = index
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetY += dragAmount.y
+                                                    val itemHeightPx = 130f * density
+                                                    val targetOffset = (dragOffsetY / itemHeightPx).roundToInt()
+                                                    val targetIdx = (index + targetOffset * 2).coerceIn(0, displayedPages.size - 1)
+                                                    if (targetIdx != index && targetOffset != 0) {
+                                                        viewModel.reorderPages(index, targetIdx)
+                                                        draggingIndex = targetIdx
+                                                        dragOffsetY = 0f
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggingIndex = null
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggingIndex = null
+                                                    dragOffsetY = 0f
+                                                }
+                                            )
+                                        }
+                                    }
+                            ) {
+                                PageGridItemCard(
+                                    page = page,
+                                    isSelected = currentPage?.id == page.id,
+                                    thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                    thumbnailVersion = thumbnailVersion,
+                                    onSelect = { viewModel.selectPage(page) },
+                                    onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                    onRename = {
+                                        dialogInputText = page.title
+                                        dialogMode = SidebarDialogMode.RenamePage(page)
+                                    },
+                                    onDuplicate = { viewModel.duplicatePage(page.id) },
+                                    onDelete = { viewModel.deletePage(page.id) }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        itemsIndexed(displayedPages, key = { _, p -> p.id }) { index, page ->
+                            val isDragging = draggingIndex == index
+                            Box(
+                                modifier = Modifier
+                                    .zIndex(if (isDragging) 10f else 1f)
+                                    .offset {
+                                        if (isDragging) IntOffset(0, dragOffsetY.roundToInt())
+                                        else IntOffset.Zero
+                                    }
+                                    .pointerInput(page.id, showFavoritesOnly) {
+                                        if (!showFavoritesOnly) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = {
+                                                    draggingIndex = index
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetY += dragAmount.y
+                                                    val itemHeightPx = 74f * density
+                                                    val targetOffset = (dragOffsetY / itemHeightPx).roundToInt()
+                                                    val targetIdx = (index + targetOffset).coerceIn(0, displayedPages.size - 1)
+                                                    if (targetIdx != index && targetOffset != 0) {
+                                                        viewModel.reorderPages(index, targetIdx)
+                                                        draggingIndex = targetIdx
+                                                        dragOffsetY = 0f
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggingIndex = null
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDragCancel = {
+                                                    draggingIndex = null
+                                                    dragOffsetY = 0f
+                                                }
+                                            )
+                                        }
+                                    }
+                            ) {
+                                PageListItemCard(
+                                    page = page,
+                                    isSelected = currentPage?.id == page.id,
+                                    thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                    thumbnailVersion = thumbnailVersion,
+                                    onSelect = { viewModel.selectPage(page) },
+                                    onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                    onRename = {
+                                        dialogInputText = page.title
+                                        dialogMode = SidebarDialogMode.RenamePage(page)
+                                    },
+                                    onDuplicate = { viewModel.duplicatePage(page.id) },
+                                    onMoveUp = { viewModel.movePageOrder(page.id, moveUp = true) },
+                                    onMoveDown = { viewModel.movePageOrder(page.id, moveUp = false) },
+                                    onDelete = { viewModel.deletePage(page.id) },
+                                    showReorderButtons = !showFavoritesOnly
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFFE2E8F0))
+
+            // Rodapé de Backup Local (.lenote)
+            OutlinedButton(
+                onClick = { viewModel.exportBackupLenotePackage() },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+            ) {
+                Icon(
+                    imageVector = PhosphorIcons.Regular.Export,
+                    contentDescription = "Exportar backup",
+                    modifier = Modifier.size(15.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Exportar Backup (.lenote)", fontSize = 11.sp)
+            }
+        }
+    }
+
+    // Diálogos para Criar / Renomear Caderno, Seção ou Página
+    val activeDialog = dialogMode
+    if (activeDialog != null) {
+        val titleText = when (activeDialog) {
+            is SidebarDialogMode.CreateNotebook -> "Novo Caderno"
+            is SidebarDialogMode.RenameNotebook -> "Renomear Caderno"
+            is SidebarDialogMode.CreateSection -> "Nova Seção"
+            is SidebarDialogMode.RenameSection -> "Renomear Seção"
+            is SidebarDialogMode.RenamePage -> "Renomear Página"
+        }
+
+        AlertDialog(
+            onDismissRequest = { dialogMode = null },
+            title = { Text(titleText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
+            text = {
+                OutlinedTextField(
+                    value = dialogInputText,
+                    onValueChange = { dialogInputText = it },
+                    singleLine = true,
+                    placeholder = { Text("Digite o nome...") }
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        when (activeDialog) {
+                            is SidebarDialogMode.CreateNotebook -> viewModel.createNewNotebook(dialogInputText)
+                            is SidebarDialogMode.RenameNotebook -> viewModel.renameNotebook(activeDialog.notebook.id, dialogInputText)
+                            is SidebarDialogMode.CreateSection -> viewModel.createNewSection(dialogInputText)
+                            is SidebarDialogMode.RenameSection -> viewModel.renameSection(activeDialog.section.id, dialogInputText)
+                            is SidebarDialogMode.RenamePage -> viewModel.renamePage(activeDialog.page.id, dialogInputText)
+                        }
+                        dialogMode = null
+                    }
+                ) {
+                    Text("Confirmar")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (activeDialog is SidebarDialogMode.RenameNotebook) {
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteNotebook(activeDialog.notebook.id)
+                                dialogMode = null
+                            }
+                        ) {
+                            Text("Excluir", color = MaterialTheme.colorScheme.error)
+                        }
+                    } else if (activeDialog is SidebarDialogMode.RenameSection) {
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteSection(activeDialog.section.id)
+                                dialogMode = null
+                            }
+                        ) {
+                            Text("Excluir", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    TextButton(onClick = { dialogMode = null }) {
+                        Text("Cancelar")
+                    }
+                }
+            }
+        )
+    }
+}
+
+private sealed interface SidebarDialogMode {
+    data object CreateNotebook : SidebarDialogMode
+    data class RenameNotebook(val notebook: NotebookEntity) : SidebarDialogMode
+    data object CreateSection : SidebarDialogMode
+    data class RenameSection(val section: SectionEntity) : SidebarDialogMode
+    data class RenamePage(val page: PageEntity) : SidebarDialogMode
+}
+
+/**
+ * Item de página limpo e elegante com miniatura realista, título, tipo de folha, favorito
+ * e menu contextual "⋯" para ações secundárias (Mover e Excluir).
+ */
+@Composable
+private fun PageListItemCard(
+    page: PageEntity,
+    isSelected: Boolean,
+    thumbnailFile: File?,
+    thumbnailVersion: Long,
+    onSelect: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onRename: () -> Unit,
+    onDuplicate: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDelete: () -> Unit,
+    showReorderButtons: Boolean
+) {
+    var isContextMenuOpen by remember { mutableStateOf(false) }
+
+    val thumbBitmap = remember(page.id, page.updatedAt, thumbnailVersion) {
+        if (thumbnailFile != null && thumbnailFile.exists()) {
+            runCatching { BitmapFactory.decodeFile(thumbnailFile.absolutePath)?.asImageBitmap() }.getOrNull()
+        } else {
+            null
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onSelect() }
+            .then(
+                if (isSelected) {
+                    Modifier.border(1.5.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                } else {
+                    Modifier.border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                }
+            ),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF8FAFC)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 1. Miniatura da Página (Thumbnail de alta qualidade com padrão de folha ou traços)
+            PageThumbnailPreview(
+                pageBackground = page.pageBackground,
+                bitmap = thumbBitmap,
+                modifier = Modifier.size(width = 46.dp, height = 62.dp)
+            )
+
+            // 2. Metadados Principais (Título + Tipo de Folha)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = page.title,
+                    fontSize = 12.sp,
+                    color = Color(0xFF0F172A),
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = page.pageBackground.label,
+                    fontSize = 10.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+
+            // 3. Botão de Favorito Direto
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    imageVector = if (page.isFavorite) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
+                    contentDescription = if (page.isFavorite) "Desfavoritar" else "Favoritar",
+                    tint = if (page.isFavorite) Color(0xFFD97706) else Color(0xFF94A3B8),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            // 4. Menu Contextual "⋯" para Ações Secundárias (Renomear, Duplicar, Mover e Excluir)
+            Box {
+                IconButton(
+                    onClick = { isContextMenuOpen = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = PhosphorIcons.Regular.DotsThreeVertical,
+                        contentDescription = "Mais ações da página",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = isContextMenuOpen,
+                    onDismissRequest = { isContextMenuOpen = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Renomear", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.PencilSimple,
+                                contentDescription = null,
+                                tint = Color(0xFF475569),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        onClick = {
+                            isContextMenuOpen = false
+                            onRename()
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = { Text("Duplicar", fontSize = 12.sp) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Copy,
+                                contentDescription = null,
+                                tint = Color(0xFF475569),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        onClick = {
+                            isContextMenuOpen = false
+                            onDuplicate()
+                        }
+                    )
+
+                    if (showReorderButtons) {
+                        DropdownMenuItem(
+                            text = { Text("Mover para cima", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.CaretUp,
+                                    contentDescription = null,
+                                    tint = Color(0xFF475569),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                isContextMenuOpen = false
+                                onMoveUp()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Mover para baixo", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.CaretDown,
+                                    contentDescription = null,
+                                    tint = Color(0xFF475569),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                isContextMenuOpen = false
+                                onMoveDown()
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Excluir página",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = PhosphorIcons.Regular.Trash,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        onClick = {
+                            isContextMenuOpen = false
+                            onDelete()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Renderização gráfica de miniatura com proporção de folha real.
+ * Renderiza os traços salvos (se disponíveis) ou o padrão da folha (pautada, quadriculada, etc.) nativamente.
+ */
+@Composable
+private fun PageThumbnailPreview(
+    pageBackground: PageBackground,
+    bitmap: androidx.compose.ui.graphics.ImageBitmap?,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(4.dp),
+        color = Color(0xFFFCFCFA),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+        shadowElevation = 1.dp
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val lineColor = Color(0xFF94A3B8).copy(alpha = 0.6f)
+                when (pageBackground) {
+                    PageBackground.BLANK -> {
+                        // Folha em branco
+                    }
+                    PageBackground.RULED -> {
+                        val spacing = size.height / 6f
+                        for (i in 1..5) {
+                            val y = i * spacing
+                            drawLine(
+                                color = lineColor,
+                                start = Offset(3f, y),
+                                end = Offset(size.width - 3f, y),
+                                strokeWidth = 0.8f
+                            )
+                        }
+                    }
+                    PageBackground.GRID -> {
+                        val spacingX = size.width / 5f
+                        val spacingY = size.height / 6f
+                        for (i in 1 until 5) {
+                            val x = i * spacingX
+                            drawLine(
+                                color = lineColor.copy(alpha = 0.4f),
+                                start = Offset(x, 2f),
+                                end = Offset(x, size.height - 2f),
+                                strokeWidth = 0.6f
+                            )
+                        }
+                        for (i in 1 until 6) {
+                            val y = i * spacingY
+                            drawLine(
+                                color = lineColor.copy(alpha = 0.4f),
+                                start = Offset(2f, y),
+                                end = Offset(size.width - 2f, y),
+                                strokeWidth = 0.6f
+                            )
+                        }
+                    }
+                    PageBackground.DOTS -> {
+                        val spacingX = size.width / 4.5f
+                        val spacingY = size.height / 6f
+                        for (i in 1..3) {
+                            for (j in 1..5) {
+                                drawCircle(
+                                    color = lineColor,
+                                    radius = 0.9f,
+                                    center = Offset(i * spacingX, j * spacingY)
+                                )
+                            }
+                        }
+                    }
+                    PageBackground.MATHEMATICS -> {
+                        val spacing = size.height / 7f
+                        for (i in 1..6) {
+                            val y = i * spacing
+                            val isAxis = i == 3
+                            drawLine(
+                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
+                                start = Offset(2f, y),
+                                end = Offset(size.width - 2f, y),
+                                strokeWidth = if (isAxis) 1.0f else 0.5f
+                            )
+                        }
+                        val spacingX = size.width / 5f
+                        for (i in 1..4) {
+                            val x = i * spacingX
+                            val isAxis = i == 2
+                            drawLine(
+                                color = if (isAxis) Color(0xFF64748B) else lineColor.copy(alpha = 0.35f),
+                                start = Offset(x, 2f),
+                                end = Offset(x, size.height - 2f),
+                                strokeWidth = if (isAxis) 1.0f else 0.5f
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Item de página em formato de grade (card vertical compacto com thumbnail dominante).
+ */
+@Composable
+private fun PageGridItemCard(
+    page: PageEntity,
+    isSelected: Boolean,
+    thumbnailFile: File?,
+    thumbnailVersion: Long,
+    onSelect: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onRename: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var isContextMenuOpen by remember { mutableStateOf(false) }
+
+    val thumbBitmap = remember(page.id, page.updatedAt, thumbnailVersion) {
+        if (thumbnailFile != null && thumbnailFile.exists()) {
+            runCatching { BitmapFactory.decodeFile(thumbnailFile.absolutePath)?.asImageBitmap() }.getOrNull()
+        } else {
+            null
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onSelect() }
+            .then(
+                if (isSelected) {
+                    Modifier.border(1.5.dp, Color(0xFF2563EB), RoundedCornerShape(8.dp))
+                } else {
+                    Modifier.border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                }
+            ),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFFEEF2FF) else Color(0xFFF8FAFC)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(95.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                PageThumbnailPreview(
+                    pageBackground = page.pageBackground,
+                    bitmap = thumbBitmap,
+                    modifier = Modifier.size(width = 70.dp, height = 90.dp)
+                )
+
+                IconButton(
+                    onClick = onToggleFavorite,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = if (page.isFavorite) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
+                        contentDescription = if (page.isFavorite) "Desfavoritar" else "Favoritar",
+                        tint = if (page.isFavorite) Color(0xFFD97706) else Color(0xFF94A3B8),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = page.title,
+                    fontSize = 11.sp,
+                    color = Color(0xFF0F172A),
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                Box {
+                    IconButton(
+                        onClick = { isContextMenuOpen = true },
+                        modifier = Modifier.size(22.dp)
+                    ) {
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.DotsThreeVertical,
+                            contentDescription = "Mais ações",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = isContextMenuOpen,
+                        onDismissRequest = { isContextMenuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Renomear", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.PencilSimple,
+                                    contentDescription = null,
+                                    tint = Color(0xFF475569),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                isContextMenuOpen = false
+                                onRename()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Duplicar", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.Copy,
+                                    contentDescription = null,
+                                    tint = Color(0xFF475569),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                isContextMenuOpen = false
+                                onDuplicate()
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Excluir", fontSize = 12.sp, color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.Trash,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            onClick = {
+                                isContextMenuOpen = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

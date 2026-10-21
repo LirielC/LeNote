@@ -12,6 +12,7 @@ kotlin = "2.1.20"
 composeBom = "2026.03.01"
 activityCompose = "1.13.0"
 ink = "1.0.0"
+mlkitDigitalInk = "19.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +40,9 @@ androidx-ink-geometry = { group = "androidx.ink", name = "ink-geometry", version
 androidx-ink-rendering = { group = "androidx.ink", name = "ink-rendering", version.ref = "ink" }
 androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "ink" }
 androidx-ink-storage = { group = "androidx.ink", name = "ink-storage", version.ref = "ink" }
+
+# Google ML Kit Digital Ink Recognition
+mlkit-digital-ink = { group = "com.google.mlkit", name = "digital-ink-recognition", version.ref = "mlkitDigitalInk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

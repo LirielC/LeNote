@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
 
+    // ML Kit Digital Ink Recognition
+    implementation(libs.mlkit.digital.ink)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

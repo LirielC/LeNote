@@ -212,9 +212,19 @@ object PageExporter {
         targetHeight: Int,
         background: PageBackground,
         strokes: List<Stroke>,
-        headerTitle: String? = null
+        headerTitle: String? = null,
+        isDarkMode: Boolean = false
     ) {
-        targetCanvas.drawRect(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat(), paperBackgroundPaint)
+        val paperBgColor = if (isDarkMode) {
+            com.example.lenote.ink.ColorInversionHelper.getPaperBackgroundColor(true)
+        } else {
+            paperBackgroundPaint.color
+        }
+        val bgPaint = Paint().apply {
+            style = Paint.Style.FILL
+            color = paperBgColor
+        }
+        targetCanvas.drawRect(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat(), bgPaint)
 
         val bounds = computePageWorldViewport(strokes)
         val worldLeft = bounds[0]
@@ -241,7 +251,8 @@ object PageExporter {
                 worldTop = worldTop,
                 worldRight = worldLeft + worldW,
                 worldBottom = worldTop + worldH,
-                scale = scale
+                scale = scale,
+                isDarkMode = isDarkMode
             )
 
             for (stroke in strokes) {
@@ -408,7 +419,8 @@ object PageExporter {
         background: PageBackground,
         strokes: List<Stroke>,
         width: Int = 1600,
-        height: Int = 2133
+        height: Int = 2133,
+        isDarkMode: Boolean = false
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "png")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -422,7 +434,8 @@ object PageExporter {
             targetHeight = height,
             background = background,
             strokes = strokes,
-            headerTitle = null // Folha limpa, sem elementos de UI
+            headerTitle = null,
+            isDarkMode = isDarkMode
         )
 
         // Grava no arquivo local (garantindo acesso offline e compatibilidade com testes)
@@ -460,7 +473,8 @@ object PageExporter {
         background: PageBackground,
         strokes: List<Stroke>,
         pageWidthPt: Int = 1200,
-        pageHeightPt: Int = 1600
+        pageHeightPt: Int = 1600,
+        isDarkMode: Boolean = false
     ): ExportResult {
         val fileName = generateExportFileName(pageTitle, "pdf")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -477,7 +491,8 @@ object PageExporter {
                 targetHeight = pageHeightPt,
                 background = background,
                 strokes = strokes,
-                headerTitle = null // Folha limpa, sem elementos de UI
+                headerTitle = null,
+                isDarkMode = isDarkMode
             )
             pdfDoc.finishPage(pdfPage)
 
@@ -513,7 +528,8 @@ object PageExporter {
         sectionTitle: String,
         pagesWithStrokes: List<Pair<PageEntity, List<Stroke>>>,
         pageWidthPt: Int = 1200,
-        pageHeightPt: Int = 1600
+        pageHeightPt: Int = 1600,
+        isDarkMode: Boolean = false
     ): ExportResult {
         val fileName = generateExportFileName(sectionTitle, "pdf")
         val exportsDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -532,7 +548,8 @@ object PageExporter {
                     targetHeight = pageHeightPt,
                     background = bg,
                     strokes = strokes,
-                    headerTitle = null
+                    headerTitle = null,
+                    isDarkMode = isDarkMode
                 )
                 pdfDoc.finishPage(pdfPage)
             }
@@ -568,7 +585,8 @@ object PageExporter {
         worldTop: Float,
         worldRight: Float,
         worldBottom: Float,
-        scale: Float
+        scale: Float,
+        isDarkMode: Boolean = false
     ) {
         if (background == PageBackground.BLANK) return
 
@@ -576,6 +594,22 @@ object PageExporter {
         val thinStrokeWorld = 1.2f / safeScale
         val mediumStrokeWorld = 2.0f / safeScale
         val axisStrokeWorld = 2.6f / safeScale
+
+        if (isDarkMode) {
+            ruledLinePaint.color = 0xFF2A3644.toInt()
+            marginLinePaint.color = 0xFF5C2D32.toInt()
+            gridMinorPaint.color = 0xFF1E2836.toInt()
+            gridMajorPaint.color = 0xFF33445C.toInt()
+            mathAxisPaint.color = 0xFF4F698A.toInt()
+            dotPaint.color = 0xFF475569.toInt()
+        } else {
+            ruledLinePaint.color = 0xFFBBDEFB.toInt()
+            marginLinePaint.color = 0xFFFFCDD2.toInt()
+            gridMinorPaint.color = 0xFFE3EAF2.toInt()
+            gridMajorPaint.color = 0xFFB0C4DE.toInt()
+            mathAxisPaint.color = 0xFF78909C.toInt()
+            dotPaint.color = 0xFFB0BEC5.toInt()
+        }
 
         when (background) {
             PageBackground.BLANK -> Unit
