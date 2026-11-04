@@ -3,6 +3,31 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+import java.util.Properties
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val releaseStorePath = System.getenv("LENOTE_KEYSTORE_PATH")
+    ?: keystoreProperties.getProperty("storeFile")
+val releaseStorePassword = System.getenv("LENOTE_KEYSTORE_PASSWORD")
+    ?: keystoreProperties.getProperty("storePassword")
+val releaseKeyAlias = System.getenv("LENOTE_KEY_ALIAS")
+    ?: keystoreProperties.getProperty("keyAlias")
+val releaseKeyPassword = System.getenv("LENOTE_KEY_PASSWORD")
+    ?: keystoreProperties.getProperty("keyPassword")
+
+val releaseKeystoreFile = releaseStorePath?.let { file(it) }
+val hasReleaseSigning = releaseKeystoreFile != null &&
+    releaseKeystoreFile.exists() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank()
+
 android {
     namespace = "com.example.lenote"
     compileSdk {
@@ -21,19 +46,13 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    val releaseKeystoreFile = file(
-        System.getenv("LENOTE_KEYSTORE_PATH")
-            ?: "${System.getProperty("user.home")}/.android/lenote-release-key.jks"
-    )
-    val hasReleaseKeystore = releaseKeystoreFile.exists()
-
     signingConfigs {
-        if (hasReleaseKeystore) {
+        if (hasReleaseSigning) {
             create("release") {
                 storeFile = releaseKeystoreFile
-                storePassword = System.getenv("LENOTE_KEYSTORE_PASSWORD") ?: "LeNoteRelease2026!"
-                keyAlias = System.getenv("LENOTE_KEY_ALIAS") ?: "lenote_release"
-                keyPassword = System.getenv("LENOTE_KEY_PASSWORD") ?: "LeNoteRelease2026!"
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
@@ -41,10 +60,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            // A assinatura de release SÓ é aplicada quando uma keystore de produção válida é fornecida
+            // via variáveis de ambiente ou keystore.properties (nunca faz fallback para debug key).
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -86,7 +105,7 @@ dependencies {
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
 
-    // Google ML Kit Digital Ink Recognition (Offline Handwriting Recognition)
+    // Google ML Kit Digital Ink Recognition (Reconhecimento de escrita à mão)
     implementation(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)

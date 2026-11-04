@@ -132,14 +132,15 @@ Every threshold—from palm rejection and single-finger scrolling to stylus barr
 | Component | Technology | Version | Purpose |
 |---|---|---|---|
 | **Language** | Kotlin | `2.1.20` | Core application and engine programming |
-| **Platform** | Android | `minSdk 24`, `targetSdk 36` | Target OS environment |
+| **Platform** | Android | `minSdk 24`, `targetSdk 36`, `compileSdk 36.1` | Target OS environment |
 | **Inking Engine** | Jetpack Ink (`androidx.ink`) | `1.0.0` | Low-latency inking, stroke geometry, brushes, and stroke serialization |
+| **Handwriting OCR** | Google ML Kit Digital Ink | `19.0.0` | On-device handwriting recognition for search indexing and font beautification |
 | **Input Capture** | Android Native Views | N/A | Low-latency dual-view architecture (`InProgressStrokesView` + `FinishedStrokesView`) |
 | **Design System & UI** | Jetpack Compose + `LeNoteTheme` | BOM `2026.03.01` | Custom "Warm Paper & Editorial Ink" design system, adaptive grid, floating toolbar |
-| **Database** | SQLite (`SQLiteOpenHelper`) | N/A | Fast, local-first metadata storage (Notebooks, Sections, Pages) with `Flow` reactivity |
+| **Database** | SQLite (`SQLiteOpenHelper` + FTS5) | Schema `v7` | Fast, local-first metadata storage and full-text handwriting search |
 | **Async & State** | Kotlin Coroutines & Flow | N/A | Background file I/O, debounce auto-save, and reactive UI state |
 | **Icons** | Phosphor Icons | Custom Compose | Consistent, lightweight vector icon system |
-| **Build System** | Gradle / AGP | `9.2.1` | Automated build system with version catalog (`libs.versions.toml`) |
+| **Build System** | Gradle / AGP | Gradle `9.4.1` / AGP `9.2.1` | Automated build system with version catalog (`libs.versions.toml`) |
 
 ---
 
@@ -262,40 +263,94 @@ LeNote/
 
 ---
 
-## Getting Started
+## Documentation
 
-### Prerequisites
-- **Android Studio**: Ladybug (2024.2.1) or newer
-- **JDK**: Java 17 or Java 21
-- **Android SDK**: `compileSdk 36`, `minSdk 24`
+Detailed technical and user documentation is available in the repository:
 
-### Clone and Build
+- **[User Guide (`docs/USER_GUIDE.md`)](docs/USER_GUIDE.md)**: Complete manual covering notebooks, sections, templates, stylus tools, partial eraser, lasso & handwriting recognition, PDF annotation, exports, and `.lenote` backups.
+- **[Storage & Persistence Architecture (`docs/STORAGE.md`)](docs/STORAGE.md)**: Deep dive into the hybrid SQLite + atomic `.ink` file storage engine, `.ink` binary layout, thumbnail generation, `400ms` debounce auto-save, `fsync` crash safety, and `.lenote` ZIP archive structure.
+- **[Dependencies & Licenses (`docs/DEPENDENCIES.md`)](docs/DEPENDENCIES.md)**: Full inventory of direct and transitive dependencies, exact versions, and licensing analysis (Apache-2.0 vs. proprietary Google ML Kit components).
+- **[Privacy Policy & Technical Verification (`PRIVACY.md`)](PRIVACY.md)**: Verifiable breakdown of on-device data storage, ML Kit language model downloads, backup behavior, and compiled `AndroidManifest.xml` permissions.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/LirielC/LeNote.git
-   cd LeNote
-   ```
+---
 
-2. Compile the application and run unit tests:
-   ```bash
-   # On Linux / macOS
-   ./gradlew testDebugUnitTest assembleDebug
+## Building from Source & Verification
 
-   # On Windows (PowerShell)
-   .\gradlew.bat testDebugUnitTest assembleDebug
-   ```
+### Tested Build Environment
+The project is verified against the following exact toolchain configuration:
+- **JDK**: Java 17 (Temurin 17 recommended) or Java 21 *(Kotlin bytecode target: JVM 11)*
+- **Gradle Wrapper**: `9.4.1` (configured in [`gradle/wrapper/gradle-wrapper.properties`](gradle/wrapper/gradle-wrapper.properties))
+- **Android Gradle Plugin (AGP)**: `9.2.1` (configured in [`gradle/libs.versions.toml`](gradle/libs.versions.toml))
+- **Kotlin**: `2.1.20`
+- **Android SDK**: `compileSdk 36` (`minorApiLevel = 1`), `targetSdk 36`, `minSdk 24`
 
-3. Install on a connected Android device:
-   ```bash
-   .\gradlew.bat installDebug
-   ```
+### 1. Clone the Repository
+```bash
+git clone https://github.com/LirielC/LeNote.git
+cd LeNote
+```
+
+### 2. Run Unit Tests
+Executes the JVM unit test suite covering storage atomicity, stroke smoothing, partial eraser geometry, lasso selection, and handwriting refinement:
+```bash
+# Linux / macOS
+./gradlew testDebugUnitTest
+
+# Windows (PowerShell)
+.\gradlew.bat testDebugUnitTest
+```
+
+### 3. Build Debug APK
+Generates an installable debug APK signed with the local Android debug key at `app/build/outputs/apk/debug/app-debug.apk`:
+```bash
+# Linux / macOS
+./gradlew assembleDebug
+
+# Windows (PowerShell)
+.\gradlew.bat assembleDebug
+```
+To install directly onto a connected Android device or emulator:
+```bash
+.\gradlew.bat installDebug
+```
+
+### 4. Configure Production Release Signing & Build Release APK
+For security, **no keystore files or passwords are committed to this repository**, and the `release` build type never falls back to a debug key.
+
+To generate a signed production APK (`app/build/outputs/apk/release/app-release.apk`), provide your own keystore via either a local `keystore.properties` file (ignored by Git) or environment variables:
+
+#### Option A: Using `keystore.properties` (Local Machine)
+Create a `keystore.properties` file in the root directory of the project:
+```properties
+storeFile=/absolute/path/to/your-release-key.jks
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+keyPassword=YOUR_KEY_PASSWORD
+```
+
+#### Option B: Using Environment Variables (CI / Shell)
+```bash
+export LENOTE_KEYSTORE_PATH="/absolute/path/to/your-release-key.jks"
+export LENOTE_KEYSTORE_PASSWORD="YOUR_STORE_PASSWORD"
+export LENOTE_KEY_ALIAS="YOUR_KEY_ALIAS"
+export LENOTE_KEY_PASSWORD="YOUR_KEY_PASSWORD"
+```
+
+Then run the release build:
+```bash
+# Linux / macOS
+./gradlew assembleRelease
+
+# Windows (PowerShell)
+.\gradlew.bat assembleRelease
+```
+*(Note: If neither `keystore.properties` nor the `LENOTE_KEYSTORE_*` environment variables are provided, `assembleRelease` produces an unsigned APK at `app/build/outputs/apk/release/app-release-unsigned.apk` that you can sign manually using `apksigner`.)*
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project's source code is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details. For third-party library licenses (including Google ML Kit terms), see [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
 ## Author
 

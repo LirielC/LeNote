@@ -36,6 +36,8 @@ local.properties.*
 *.key
 *.p12
 *.pepk
+keystore.properties
+keystore.properties.*
 
 # Native C/C++ build directories
 .externalNativeBuild/
