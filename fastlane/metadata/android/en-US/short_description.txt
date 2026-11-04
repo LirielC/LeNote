@@ -1,1 +1,0 @@
-Low-latency handwriting notebook with Jetpack Ink, 9 paper templates & PDF export.

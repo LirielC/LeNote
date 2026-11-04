@@ -1,3 +1,0 @@
-• Conformidade 100% FOSS: Removidas as dependências proprietárias ML Kit, Google Mobile Services (GMS) e Firebase.
-• Assinado com certificado de produção dedicado (CN=Liriel Castro, O=LirielC).
-• Refinamento caligráfico vetorial e alinhamento de linha de base 100% offline.

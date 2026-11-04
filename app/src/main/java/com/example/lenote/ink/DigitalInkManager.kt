@@ -30,7 +30,7 @@ data class DigitalInkRecognitionResult(
 )
 
 /**
- * Utilitário e gerenciador assíncrono para Google ML Kit Digital Ink Recognition (Flavor `full`).
+ * Utilitário e gerenciador assíncrono para Google ML Kit Digital Ink Recognition.
  * - Gerencia o ciclo de vida do modelo offline (padrão pt-BR ou locale do sistema);
  * - Converte instâncias de [androidx.ink.strokes.Stroke] em [com.google.mlkit.vision.digitalink.recognition.Ink];
  * - Executa inferência assíncrona fora da thread principal (`Dispatchers.Default`).

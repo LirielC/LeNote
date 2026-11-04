@@ -21,12 +21,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Requisito do F-Droid / IzzyOnDroid: não incluir bloco de metadados criptografado com chave do Google
-    dependenciesInfo {
-        includeInApk = false
-        includeInBundle = false
-    }
-
     val releaseKeystoreFile = file(
         System.getenv("LENOTE_KEYSTORE_PATH")
             ?: "${System.getProperty("user.home")}/.android/lenote-release-key.jks"
@@ -54,19 +48,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-    }
-
-    flavorDimensions += "edition"
-    productFlavors {
-        // Edição 100% FOSS para F-Droid e IzzyOnDroid (zero ML Kit / GMS / Firebase)
-        create("foss") {
-            dimension = "edition"
-            isDefault = true
-        }
-        // Edição Full com Google ML Kit Digital Ink Recognition (OCR de caligrafia para fonte)
-        create("full") {
-            dimension = "edition"
         }
     }
 
@@ -103,8 +84,8 @@ dependencies {
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
 
-    // Google ML Kit Digital Ink Recognition (exclusivo da edição "full", ausente na "foss")
-    "fullImplementation"(libs.mlkit.digital.ink)
+    // Google ML Kit Digital Ink Recognition (Offline Handwriting Recognition)
+    implementation(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")

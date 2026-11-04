@@ -1,5 +1,0 @@
-• Actualizado applicationId a io.github.lirielc.lenote para compatibilidad oficial con F-Droid e IzzyOnDroid.
-• Desactivado el bloque dependenciesInfo para compilaciones abiertas reproducibles.
-• Añadida internacionalización completa (Español, Portugués e Inglés) con detección automática del sistema Android.
-• Añadida Tinta Blanca (#FFFFFF) en la paleta de pluma y lazo.
-• Rediseño visual completo con el sistema editorial "Warm Paper & Editorial Ink".

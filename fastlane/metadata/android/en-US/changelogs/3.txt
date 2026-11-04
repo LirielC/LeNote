@@ -1,3 +1,0 @@
-• 100% FOSS Compliance: Removed proprietary ML Kit, Google Mobile Services (GMS), and Firebase transitive dependencies.
-• Signed with dedicated production release certificate (CN=Liriel Castro, O=LirielC).
-• Pure offline vector calligraphy refinement and baseline alignment.
