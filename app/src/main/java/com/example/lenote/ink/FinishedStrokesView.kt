@@ -378,13 +378,15 @@ class FinishedStrokesView @JvmOverloads constructor(
             pageBackground = background
             changed = true
         }
-        if (paperColor != null && paperColorLong != paperColor) {
-            paperColorLong = paperColor
-            updatePaperColorInternal(paperColor)
+        val targetColor = paperColor ?: paperColorLong
+        if (paperColorLong != targetColor) {
+            paperColorLong = targetColor
+            updatePaperColorInternal(targetColor)
             changed = true
         }
-        if (changed) {
+        if (changed || staticCacheDirty) {
             staticCacheDirty = true
+            postInvalidate()
             invalidate()
         }
     }
@@ -394,6 +396,7 @@ class FinishedStrokesView @JvmOverloads constructor(
             paperColorLong = paperColor
             updatePaperColorInternal(paperColor)
             staticCacheDirty = true
+            postInvalidate()
             invalidate()
         }
     }

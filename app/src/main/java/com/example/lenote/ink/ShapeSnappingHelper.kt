@@ -283,4 +283,29 @@ object ShapeSnappingHelper {
         }
         return list
     }
+
+    /**
+     * Alinhamento de Linha de Base via OCR (Baseline Alignment).
+     *
+     * Identifica a linha de base inferior média da sequência de palavras manuscritas
+     * e calcula o deslocamento vetorial vertical dy necessário para encaixar a frase
+     * na linha de pauta mais próxima (espaçamento padrão de 48f da pauta Ruled).
+     *
+     * @param wordBottoms Lista das coordenadas Y inferiores das caixas de palavras.
+     * @param lineSpacing Espaçamento entre as linhas da folha (padrão 48f).
+     * @return O deslocamento dy (positivo ou negativo) para alinhar com a pauta mais próxima.
+     */
+    fun calculateBaselineSnapDeltaY(wordBottoms: List<Float>, lineSpacing: Float = 48f): Float {
+        if (wordBottoms.isEmpty() || lineSpacing <= 0f) return 0f
+        // Calcula a mediana ou média das bases inferiores das palavras
+        val sorted = wordBottoms.sorted()
+        val medianBottom = if (sorted.size % 2 == 1) {
+            sorted[sorted.size / 2]
+        } else {
+            (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2f
+        }
+        val nearestRuledY = Math.round(medianBottom / lineSpacing) * lineSpacing
+        return (nearestRuledY - medianBottom)
+    }
+
 }

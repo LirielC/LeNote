@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.IntOffset
@@ -70,21 +71,27 @@ fun CanvasMediaOverlay(
     var selectedImageId by remember { mutableStateOf<String?>(null) }
     var selectedTextId by remember { mutableStateOf<String?>(null) }
 
-    Box(
-        modifier = modifier
+    // O contêiner raiz NÃO intercepta nenhum toque, permitindo passagem 100% livre para o Canvas nativo.
+    // Apenas quando a ferramenta de texto estiver explicitamente ativa, capturamos toques para criar caixas.
+    val rootModifier = if (isTextToolActive) {
+        modifier
             .fillMaxSize()
             .pointerInput(isTextToolActive, zoom, panX, panY) {
-                if (isTextToolActive) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val worldX = (offset.x - panX) / zoom
-                            val worldY = (offset.y - panY) / zoom
-                            onAddTextBlock(worldX, worldY)
-                        },
-                        onDrag = { _, _ -> }
-                    )
-                }
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        val worldX = (offset.x - panX) / zoom
+                        val worldY = (offset.y - panY) / zoom
+                        onAddTextBlock(worldX, worldY)
+                    },
+                    onDrag = { _, _ -> }
+                )
             }
+    } else {
+        modifier
+    }
+
+    Box(
+        modifier = rootModifier
     ) {
         // 1. Renderiza Imagens Interativas
         for (img in imageBlocks.sortedBy { it.zIndex }) {
@@ -179,10 +186,12 @@ private fun InteractiveImageItem(
                 detectDragGestures(
                     onDragStart = { onSelect() },
                     onDrag = { change, dragAmount ->
-                        change.consume()
-                        currentX += dragAmount.x / zoom
-                        currentY += dragAmount.y / zoom
-                        onUpdate(imageBlock.copy(x = currentX, y = currentY))
+                        if (change.type != PointerType.Stylus) {
+                            change.consume()
+                            currentX += dragAmount.x / zoom
+                            currentY += dragAmount.y / zoom
+                            onUpdate(imageBlock.copy(x = currentX, y = currentY))
+                        }
                     }
                 )
             }
@@ -249,12 +258,14 @@ private fun InteractiveImageItem(
                     .background(Color(0xFF2563EB), CircleShape)
                     .pointerInput(zoom) {
                         detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            val dw = dragAmount.x / zoom
-                            val dh = dragAmount.y / zoom
-                            currentW = max(60f, currentW + dw)
-                            currentH = max(60f, currentH + dh)
-                            onUpdate(imageBlock.copy(width = currentW, height = currentH))
+                            if (change.type != PointerType.Stylus) {
+                                change.consume()
+                                val dw = dragAmount.x / zoom
+                                val dh = dragAmount.y / zoom
+                                currentW = max(60f, currentW + dw)
+                                currentH = max(60f, currentH + dh)
+                                onUpdate(imageBlock.copy(width = currentW, height = currentH))
+                            }
                         }
                     }
             )
@@ -317,10 +328,12 @@ private fun InteractiveTextItem(
                                 detectDragGestures(
                                     onDragStart = { onSelect() },
                                     onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        currentX += dragAmount.x / zoom
-                                        currentY += dragAmount.y / zoom
-                                        onUpdate(textBlock.copy(x = currentX, y = currentY))
+                                        if (change.type != PointerType.Stylus) {
+                                            change.consume()
+                                            currentX += dragAmount.x / zoom
+                                            currentY += dragAmount.y / zoom
+                                            onUpdate(textBlock.copy(x = currentX, y = currentY))
+                                        }
                                     }
                                 )
                             }
@@ -358,7 +371,8 @@ private fun InteractiveTextItem(
                 },
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
                     fontSize = (textBlock.fontSize * zoom).coerceAtLeast(12f).sp,
-                    color = Color(textBlock.textColor)
+                    color = Color(textBlock.textColor),
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Cursive
                 ),
                 cursorBrush = SolidColor(Color(0xFF2563EB)),
                 modifier = Modifier

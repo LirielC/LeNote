@@ -6,6 +6,7 @@ import android.graphics.Matrix
 
 import android.graphics.RectF
 
+import android.util.Log
 import android.view.MotionEvent
 
 import android.view.ScaleGestureDetector
@@ -187,6 +188,8 @@ class JetpackInkEngine : InkingEngine {
     // Mapeamento de ponteiros STYLUS ativos para o ID do stroke em progresso
 
     private val activeStrokeIds = mutableMapOf<Int, InProgressStrokeId>()
+    // Filtro de estabilização em tempo real (EMA - Exponential Moving Average) para supressão de microtremores
+    private val activeStrokeFilteredScreenPos = mutableMapOf<Int, Pair<Float, Float>>()
 
 
 
@@ -645,6 +648,10 @@ class JetpackInkEngine : InkingEngine {
 
         _state.update { it.copy(smoothingLevel = level) }
 
+    }
+
+    override fun setTouchInkingEnabled(enabled: Boolean) {
+        _state.update { it.copy(isTouchInkingEnabled = enabled) }
     }
 
 
@@ -1201,18 +1208,22 @@ class JetpackInkEngine : InkingEngine {
      */
 
     fun isStylusToolType(toolType: Int): Boolean {
-
-        return toolType == MotionEvent.TOOL_TYPE_STYLUS ||
-
-            toolType == MotionEvent.TOOL_TYPE_ERASER
-
+        if (toolType == MotionEvent.TOOL_TYPE_STYLUS || toolType == MotionEvent.TOOL_TYPE_ERASER) {
+            return true
+        }
+        // Dedo só é aceito para tinta se a preferência de Desenhar com o Dedo (isTouchInkingEnabled) estiver ativada
+        if (toolType == MotionEvent.TOOL_TYPE_FINGER && _state.value.isTouchInkingEnabled && (_state.value.currentTool is InkingTool.Pen || _state.value.currentTool is InkingTool.Highlighter)) {
+            return true
+        }
+        return false
     }
 
 
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-
         val actionMasked = event.actionMasked
+        val pointer0ToolType = if (event.pointerCount > 0) event.getToolType(0) else MotionEvent.TOOL_TYPE_UNKNOWN
+        android.util.Log.d("LeNoteInking", "onTouchEvent: action=$actionMasked, toolType=$pointer0ToolType, activeTool=${_state.value.currentTool}")
 
         val actionIndex = event.actionIndex
 
@@ -1326,44 +1337,32 @@ class JetpackInkEngine : InkingEngine {
 
 
 
-        // 2. Se a Stylus está ativa ou presente no evento, ela tem prioridade absoluta.
+                // Se 2 ou mais dedos estiverem na tela e nenhum traço ativo estiver em andamento,
+        // priorizamos o gesto de pinça/zoom (Pinch-to-zoom).
+        val hasActiveHardwareStylus = hasStylusInEvent && (0 until event.pointerCount).any {
+            val t = event.getToolType(it)
+            t == MotionEvent.TOOL_TYPE_STYLUS || t == MotionEvent.TOOL_TYPE_ERASER
+        }
+        val isDrawingInProgress = activeStrokeIds.isNotEmpty() || activeEraserPointerIds.isNotEmpty() || activeLassoPointerId != -1
 
-        // Qualquer Pan/Zoom de dedos é encerrado imediatamente sem cancelar o traço da Stylus.
-
-        // Isso garante Palm Rejection total: a palma apoiada na tela jamais moverá a página enquanto a stylus atuar.
-
-        if (isStylusCurrentlyActive) {
-
+        if (fingerCount >= 2 && !hasActiveHardwareStylus && !isDrawingInProgress) {
+            // Permite cair no bloco 3 e 4 para Pinch-to-Zoom com 2 dedos
+        } else if (isStylusCurrentlyActive) {
             if (isTwoFingerPanZoomActive) {
-
                 isTwoFingerPanZoomActive = false
-
             }
-
             if (isSingleFingerPanActive) {
-
                 isSingleFingerPanActive = false
-
                 isSingleFingerDragging = false
-
             }
-
             return handleStylusPipeline(
-
                 event = event,
-
                 actionMasked = actionMasked,
-
                 actionIndex = actionIndex,
-
                 actionPointerId = actionPointerId,
-
                 actionToolType = actionToolType,
-
                 isFlagCanceled = isFlagCanceled
-
             )
-
         }
 
 
@@ -2067,6 +2066,7 @@ class JetpackInkEngine : InkingEngine {
                     if (strokeView != null) {
 
                         val brush = createBrushForCurrentTool()
+                        android.util.Log.d("LeNoteInking", "startStroke called with brush=${brush.colorIntArgb} size=${brush.size}")
 
                         val strokeId = strokeView.startStroke(
 
@@ -2087,6 +2087,8 @@ class JetpackInkEngine : InkingEngine {
                         val sx = event.getX(actionIndex)
 
                         val sy = event.getY(actionIndex)
+
+                        activeStrokeFilteredScreenPos[actionPointerId] = Pair(sx, sy)
 
                         val wx = screenToWorldX(sx, sy)
 
@@ -2140,11 +2142,18 @@ class JetpackInkEngine : InkingEngine {
 
                         strokeView.addToStroke(event, pId, strokeId)
 
-                        val sx = event.getX(i)
+                        val rawSx = event.getX(i)
 
-                        val sy = event.getY(i)
+                        val rawSy = event.getY(i)
 
-                        val wx = screenToWorldX(sx, sy)
+                        // Estabilização em tempo real dos pontos geométricos via interpolação ponderada (alpha=0.72)
+                        // Elimina ruídos de alta frequência e microtremores sem atrasar a caneta
+                        val prevFiltered = activeStrokeFilteredScreenPos[pId] ?: Pair(rawSx, rawSy)
+                        val smoothedSx = prevFiltered.first * 0.28f + rawSx * 0.72f
+                        val smoothedSy = prevFiltered.second * 0.28f + rawSy * 0.72f
+                        activeStrokeFilteredScreenPos[pId] = Pair(smoothedSx, smoothedSy)
+
+                        val wx = screenToWorldX(smoothedSx, smoothedSy)
 
                         val wy = scratchPoint[1]
 
@@ -2353,6 +2362,7 @@ class JetpackInkEngine : InkingEngine {
             MotionEvent.ACTION_POINTER_UP -> {
 
                 val strokeId = activeStrokeIds.remove(actionPointerId)
+                activeStrokeFilteredScreenPos.remove(actionPointerId)
 
                 if (strokeId != null) {
 
@@ -2493,6 +2503,7 @@ class JetpackInkEngine : InkingEngine {
             MotionEvent.ACTION_UP -> {
 
                 val strokeId = activeStrokeIds.remove(actionPointerId)
+                activeStrokeFilteredScreenPos.remove(actionPointerId)
 
                 if (strokeId != null) {
 
@@ -2853,6 +2864,41 @@ class JetpackInkEngine : InkingEngine {
     }
 
 
+
+    fun alignSelectedStrokesToBaseline(deltaY: Float) {
+        if (selectedStrokes.isEmpty() || Math.abs(deltaY) < 0.5f) return
+        val beforeSnapshot = ArrayList(finishedStrokes)
+        val newSelectedSet: MutableSet<Stroke> =
+            java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+        val updatedList = ArrayList<Stroke>(finishedStrokes.size)
+
+        for (s in finishedStrokes) {
+            if (selectedStrokes.contains(s)) {
+                val moved = LassoSelectionHelper.translateStroke(s, 0f, deltaY)
+                updatedList.add(moved)
+                newSelectedSet.add(moved)
+            } else {
+                updatedList.add(s)
+            }
+        }
+
+        finishedStrokes.clear()
+        finishedStrokes.addAll(updatedList)
+        selectedStrokes.clear()
+        selectedStrokes.addAll(newSelectedSet)
+
+        undoStack.add(
+            InkHistoryOperation.TransformStrokes(
+                beforeStrokes = beforeSnapshot,
+                afterStrokes = ArrayList(finishedStrokes)
+            )
+        )
+        redoStack.clear()
+        contentVersionCounter++
+        currentSelectionBoundsWorld = LassoSelectionHelper.computeCombinedBounds(selectedStrokes)
+        finishedStrokesView?.updateLassoOverlay(emptyList(), currentSelectionBoundsWorld)
+        syncStateAndRender()
+    }
 
     override fun deleteSelectedStrokes() {
 

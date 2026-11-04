@@ -22,7 +22,9 @@ import com.example.lenote.data.NotebookPackageExporter
 import com.example.lenote.export.ExportResult
 import com.example.lenote.export.PageExporter
 import com.example.lenote.ink.DigitalInkManager
+import com.example.lenote.ink.InkingTool
 import com.example.lenote.ink.JetpackInkEngine
+import com.example.lenote.ink.PenStrokeSize
 import com.example.lenote.ink.PageBackground
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -157,6 +159,8 @@ class InkPlaygroundViewModel : ViewModel() {
         val prefs = AppPreferences(appCtx)
         appPreferences = prefs
         _toolbarDockEdge.value = prefs.toolbarDockEdge
+        val touchInking = prefs.isTouchInkingEnabled
+        engine.setTouchInkingEnabled(touchInking)
         _themeMode.value = prefs.themeMode
         _isSidebarGridView.value = prefs.isSidebarGridView
 
@@ -290,6 +294,13 @@ class InkPlaygroundViewModel : ViewModel() {
         // Carrega blocos de mídia da página
         _textBlocks.value = repo.getTextBlocks(page.id)
         _imageBlocks.value = repo.getImageBlocks(page.id)
+
+        // Passo 3: Forçar ferramenta padrão para Pen com cor válida e visível
+        val activeTool = engine.state.value.currentTool
+        if (activeTool !is InkingTool.Pen && activeTool !is InkingTool.Highlighter) {
+            val penColor = if (page.paperColor == 0xFF1E293B) 0xFFF8FAFC.toInt() else 0xFF000000.toInt()
+            engine.setTool(InkingTool.Pen(colorInt = penColor, size = PenStrokeSize.MEDIUM.sizeWorld))
+        }
     }
 
     private fun scheduleAutoSave() {
@@ -430,6 +441,17 @@ class InkPlaygroundViewModel : ViewModel() {
         val repo = repository ?: return 0
         val secs = repo.database.getSectionsByNotebook(notebookId)
         return secs.sumOf { repo.database.getPagesBySection(it.id).size }
+    }
+
+    fun getNotebookForSection(sectionId: String): NotebookEntity? {
+        val repo = repository ?: return null
+        val sec = repo.database.getSectionById(sectionId) ?: return null
+        return _notebooks.value.find { it.id == sec.notebookId }
+    }
+
+    fun toggleDarkThemeMode() {
+        val next = if (_themeMode.value == ThemeMode.DARK) ThemeMode.LIGHT else ThemeMode.DARK
+        setThemeMode(next)
     }
 
 
@@ -657,6 +679,17 @@ class InkPlaygroundViewModel : ViewModel() {
         scheduleAutoSave()
     }
 
+    fun changePageTemplateFor(pageId: String, background: PageBackground, paperColor: Long) {
+        val repo = repository ?: return
+        repo.updatePageTemplate(pageId, background, paperColor)
+        val cur = _currentPage.value
+        if (cur != null && cur.id == pageId) {
+            engine.setPageBackground(background, paperColor)
+            _currentPage.value = cur.copy(pageBackground = background, paperColor = paperColor)
+            scheduleAutoSave()
+        }
+    }
+
     fun renameCurrentPage(newTitle: String) {
         val page = _currentPage.value ?: return
         val repo = repository ?: return
@@ -744,6 +777,13 @@ class InkPlaygroundViewModel : ViewModel() {
         appPreferences?.isSidebarGridView = next
     }
 
+    fun toggleTouchInking() {
+        val current = engine.state.value.isTouchInkingEnabled
+        val next = !current
+        engine.setTouchInkingEnabled(next)
+        appPreferences?.isTouchInkingEnabled = next
+    }
+
     fun deletePage(pageId: String) {
         val repo = repository ?: return
         val secId = _selectedSectionId.value ?: return
@@ -807,6 +847,86 @@ class InkPlaygroundViewModel : ViewModel() {
             _currentSearchHighlights.value = highlightBoxes
             engine.setSearchHighlights(highlightBoxes)
         }
+    }
+
+
+    /**
+     * Alinha a linha de base dos traços selecionados pelo Laço à pauta mais próxima do papel.
+     */
+    suspend fun alignSelectedStrokesToBaseline(): Result<Float> {
+        val inkMgr = digitalInkManager ?: return Result.failure(IllegalStateException("DigitalInkManager não inicializado"))
+        val selected = engine.getSelectedStrokesSnapshot()
+        if (selected.isEmpty()) {
+            return Result.failure(IllegalStateException("Nenhum traço selecionado com o Laço."))
+        }
+        val ocrResult = inkMgr.recognizeStrokes(selected).getOrNull()
+            ?: return Result.failure(IllegalStateException("Falha ao reconhecer linha de base manuscrita."))
+
+        val wordBottoms = ocrResult.wordBoxes.map { it.bottom }
+        val bounds = engine.state.value.selectionBoundsWorld
+        val effectiveBottoms = if (wordBottoms.isNotEmpty()) wordBottoms else listOfNotNull(bounds?.yMax)
+        if (effectiveBottoms.isEmpty()) {
+            return Result.failure(IllegalStateException("Não foi possível calcular a linha de base."))
+        }
+
+        val deltaY = com.example.lenote.ink.ShapeSnappingHelper.calculateBaselineSnapDeltaY(effectiveBottoms, 48f)
+        engine.alignSelectedStrokesToBaseline(deltaY)
+        scheduleAutoSave()
+        return Result.success(deltaY)
+    }
+
+    /**
+     * Ação "Embelezar Caligrafia": reconhece os traços selecionados e os substitui por uma caixa
+     * de texto com fonte manuscrita elegante, preservando cor, tamanho e posição da escrita original.
+     */
+    suspend fun beautifySelectedStrokesWithFont(): Result<String> {
+        val inkMgr = digitalInkManager ?: return Result.failure(IllegalStateException("DigitalInkManager não inicializado"))
+        val selected = engine.getSelectedStrokesSnapshot()
+        if (selected.isEmpty()) {
+            return Result.failure(IllegalStateException("Nenhum traço selecionado com o Laço."))
+        }
+        val curPage = _currentPage.value ?: return Result.failure(IllegalStateException("Página não encontrada."))
+        val ocrResult = inkMgr.recognizeStrokes(selected).getOrNull()
+            ?: return Result.failure(IllegalStateException("Não foi possível reconhecer o texto manuscrito."))
+
+        val recognizedText = ocrResult.fullText.trim()
+        if (recognizedText.isEmpty()) {
+            return Result.failure(IllegalStateException("Nenhum caractere reconhecido nos traços selecionados."))
+        }
+
+        val bounds = engine.state.value.selectionBoundsWorld
+        val worldX = bounds?.xMin ?: 100f
+        val worldY = bounds?.yMin ?: 100f
+        val boxWidth = Math.max(160f, ((bounds?.let { it.xMax - it.xMin }) ?: 200f) + 30f)
+        val boxHeight = Math.max(60f, ((bounds?.let { it.yMax - it.yMin }) ?: 60f) + 10f)
+
+        // Calcula cor e tamanho da fonte proporcionais ao tamanho original da escrita
+        val sampleBrush = selected.firstOrNull()?.brush
+        val textColor = sampleBrush?.colorIntArgb ?: 0xFF0F172A.toInt()
+        val calculatedFontSize = (Math.max(16f, ((bounds?.let { it.yMax - it.yMin }) ?: 40f) * 0.55f)).coerceIn(16f, 72f)
+
+        // Cria o bloco de texto correspondente
+        val textBlock = com.example.lenote.data.CanvasTextBlock(
+            id = java.util.UUID.randomUUID().toString(),
+            pageId = curPage.id,
+            text = recognizedText,
+            x = worldX,
+            y = worldY,
+            width = boxWidth,
+            height = boxHeight,
+            textColor = textColor,
+            fontSize = calculatedFontSize,
+            zIndex = (_textBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
+        )
+
+        repository?.upsertTextBlock(textBlock)
+        _textBlocks.value = repository?.getTextBlocks(curPage.id) ?: emptyList()
+
+        // Remove os traços originais da folha e limpa o laço
+        engine.deleteSelectedStrokes()
+        scheduleAutoSave()
+
+        return Result.success(recognizedText)
     }
 
     suspend fun convertSelectedStrokesToText(): Result<String> {

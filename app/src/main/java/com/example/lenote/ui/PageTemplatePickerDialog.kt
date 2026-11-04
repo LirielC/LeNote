@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -27,17 +26,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,13 +55,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.lenote.ink.PageBackground
 import com.example.lenote.ink.PaperColors
+import com.example.lenote.ui.theme.LeNoteTheme
 
 /**
- * Diálogo moderno para seleção de Modelo de Página (Page Template) e Cor do Papel.
- *
- * Pode ser utilizado tanto para:
- * 1. Criar uma nova página com modelo e cor personalizados;
- * 2. Alterar o modelo e a cor de uma página já existente sem perder traços.
+ * Diálogo Editorial para seleção de Modelo de Página (Page Template) e Tonalidade do Papel.
  */
 @Composable
 fun PageTemplatePickerDialog(
@@ -73,16 +71,17 @@ fun PageTemplatePickerDialog(
 ) {
     var title by remember { mutableStateOf(initialTitle) }
     var selectedBackground by remember { mutableStateOf(initialBackground) }
-    var selectedPaperColor by remember { mutableStateOf(initialPaperColor) }
+    var selectedPaperColor by remember { mutableLongStateOf(initialPaperColor) }
 
     Dialog(onDismissRequest = onDismiss) {
-        Card(
+        Surface(
             modifier = Modifier
-                .widthIn(max = 560.dp)
+                .widthIn(max = 540.dp)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+            shape = RoundedCornerShape(18.dp),
+            color = LeNoteTheme.colors.elevatedSurface,
+            shadowElevation = 10.dp,
+            border = BorderStroke(1.dp, LeNoteTheme.colors.hairlineBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -90,31 +89,31 @@ fun PageTemplatePickerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Cabeçalho
+                // Cabeçalho Editorial
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Column {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = if (isCreateMode) "Nova Página" else "Modelo de Página",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            text = if (isCreateMode) "NOVA FOLHA DE CADERNO" else "ATRIBUTOS DO PAPEL",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LeNoteTheme.colors.inkMuted
                         )
                         Text(
-                            text = if (isCreateMode) "Escolha o modelo e a cor da folha" else "Altere o fundo e a cor da folha atual",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (isCreateMode) "Escolher Pauta & Papel" else "Modelo & Cor da Folha",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = LeNoteTheme.colors.inkPrimary
                         )
                     }
 
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.X,
                             contentDescription = "Fechar",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = LeNoteTheme.colors.inkSecondary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
@@ -124,26 +123,31 @@ fun PageTemplatePickerDialog(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Nome da Página") },
-                        placeholder = { Text("Ex: Resumo da Aula, Análise...") },
+                        label = { Text("Título da Folha") },
+                        placeholder = { Text("Ex: Notas de Leitura, Esboço...") },
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LeNoteTheme.colors.accentPrimary,
+                            unfocusedBorderColor = LeNoteTheme.colors.hairlineBorder
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
-                // Seção 1: Cor do Papel
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+
+                // Seção 1: Tonalidade do Papel
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "COR DO PAPEL",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "GRAMATURA & TONALIDADE DO PAPEL",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LeNoteTheme.colors.inkSecondary
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PaperColors.DefaultOptions.forEach { option ->
@@ -152,11 +156,11 @@ fun PageTemplatePickerDialog(
 
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp),
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(8.dp))
                                     .clickable { selectedPaperColor = option.colorLong }
-                                    .padding(4.dp)
+                                    .padding(horizontal = 4.dp, vertical = 4.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -164,8 +168,8 @@ fun PageTemplatePickerDialog(
                                         .clip(CircleShape)
                                         .background(paperCardColor)
                                         .border(
-                                            width = if (isSelected) 3.dp else 1.dp,
-                                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFCBD5E1),
+                                            width = if (isSelected) 2.5.dp else 1.dp,
+                                            color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.hairlineBorder,
                                             shape = CircleShape
                                         ),
                                     contentAlignment = Alignment.Center
@@ -174,29 +178,30 @@ fun PageTemplatePickerDialog(
                                         Icon(
                                             imageVector = PhosphorIcons.Regular.Check,
                                             contentDescription = "Selecionado",
-                                            tint = if (PaperColors.isDarkPaper(option.colorLong)) Color.White else Color(0xFF1E3A8A),
-                                            modifier = Modifier.size(18.dp)
+                                            tint = if (PaperColors.isDarkPaper(option.colorLong)) Color.White else LeNoteTheme.colors.accentPrimary,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                                 Text(
                                     text = option.name,
-                                    fontSize = 10.sp,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = if (isSelected) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkSecondary
                                 )
                             }
                         }
                     }
                 }
 
-                // Seção 2: Grade de Modelos Pedagógicos e Técnicos
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+
+                // Seção 2: Grade de 9 Modelos Pedagógicos e Técnicos
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "MODELO DE FUNDO",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "PAUTA & GEOMETRIA DA FOLHA",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LeNoteTheme.colors.inkSecondary
                     )
 
                     LazyVerticalGrid(
@@ -205,7 +210,7 @@ fun PageTemplatePickerDialog(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .height(312.dp)
                     ) {
                         items(PageBackground.entries) { bg ->
                             val isSelected = selectedBackground == bg
@@ -226,16 +231,20 @@ fun PageTemplatePickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancelar")
+                        Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
                             onConfirm(title.trim(), selectedBackground, selectedPaperColor)
                         },
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LeNoteTheme.colors.accentPrimary,
+                            contentColor = Color.White
+                        )
                     ) {
-                        Text(if (isCreateMode) "Criar Página" else "Salvar Alterações")
+                        Text(if (isCreateMode) "Criar Folha" else "Aplicar à Folha")
                     }
                 }
             }
@@ -255,43 +264,43 @@ private fun TemplateCardItem(
 ) {
     val bgColor = Color(paperColor.toInt())
     val isDark = PaperColors.isDarkPaper(paperColor)
-    val strokeColor = if (isSelected) MaterialTheme.colorScheme.primary else Color(0xFFE2E8F0)
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(if (isSelected) 2.5.dp else 1.dp, strokeColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) LeNoteTheme.colors.accentPrimaryContainer.copy(alpha = 0.55f) else LeNoteTheme.colors.tonalSurface.copy(alpha = 0.5f),
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.hairlineBorder
+        )
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.2f),
-                shape = RoundedCornerShape(6.dp),
+                    .aspectRatio(1.25f),
+                shape = RoundedCornerShape(5.dp),
                 color = bgColor,
-                border = BorderStroke(0.8f.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+                border = BorderStroke(0.8f.dp, if (isDark) Color(0xFF334155) else LeNoteTheme.colors.hairlineBorder)
             ) {
                 TemplatePreviewCanvas(background = background, isDark = isDark)
             }
 
             Text(
                 text = background.label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.5.sp),
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                fontSize = 11.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.inkPrimary
             )
         }
     }
@@ -365,14 +374,10 @@ fun TemplatePreviewCanvas(
                 val cueX = w * 0.28f
                 val summaryY = h * 0.82f
 
-                // Cabeçalho e Sumário
                 drawLine(color = majorLineColor, start = Offset(2f, headerY), end = Offset(w - 2f, headerY), strokeWidth = 1.2f)
                 drawLine(color = majorLineColor, start = Offset(2f, summaryY), end = Offset(w - 2f, summaryY), strokeWidth = 1.2f)
-
-                // Linha de Cues
                 drawLine(color = majorLineColor, start = Offset(cueX, headerY), end = Offset(cueX, summaryY), strokeWidth = 1.2f)
 
-                // Pautas sutis nas notas
                 val noteSpacing = (summaryY - headerY) / 5f
                 for (i in 1..4) {
                     val y = headerY + i * noteSpacing

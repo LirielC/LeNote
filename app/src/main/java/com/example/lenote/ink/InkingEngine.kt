@@ -87,6 +87,7 @@ data class InkingState(
     val hoverPreviewRadiusPx: Float = 5f,
     val hoverPreviewColorInt: Int = 0xFF000000.toInt(),
     val isStylusButtonEraserActive: Boolean = false,
+    val isTouchInkingEnabled: Boolean = false,
     val selectedStrokeCount: Int = 0,
     val selectionBoundsWorld: SelectionBoundsBox? = null,
     val pageBackground: PageBackground = PageBackground.BLANK,
@@ -115,6 +116,7 @@ interface InkingEngine {
     fun setEraserSize(size: EraserSize)
     fun setPageBackground(background: PageBackground)
     fun setSmoothingLevel(level: SmoothingLevel)
+    fun setTouchInkingEnabled(enabled: Boolean) {}
     fun setCameraTransform(zoom: Float, panX: Float, panY: Float)
     fun deleteSelectedStrokes()
     fun duplicateSelectedStrokes()

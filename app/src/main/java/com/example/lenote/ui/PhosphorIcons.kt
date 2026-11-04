@@ -184,6 +184,7 @@ object PhosphorIcons {
             )
         }
 
+        val HandPointing: ImageVector by lazy { Hand }
         val Hand: ImageVector by lazy {
             createPhosphorVector(
                 "Phosphor.Regular.Hand",
@@ -508,6 +509,7 @@ object PhosphorIcons {
             )
         }
 
+        val HandPointing: ImageVector by lazy { Hand }
         val Hand: ImageVector by lazy {
             createPhosphorVector(
                 "Phosphor.Fill.Hand",

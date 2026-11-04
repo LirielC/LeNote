@@ -3,12 +3,9 @@ package com.example.lenote.ui
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
-import java.io.FileOutputStream
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,18 +30,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -58,10 +50,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -70,15 +62,21 @@ import com.example.lenote.data.NotebookEntity
 import com.example.lenote.data.PageEntity
 import com.example.lenote.data.SectionEntity
 import com.example.lenote.ink.PageBackground
+import com.example.lenote.ui.theme.EditorialActionChip
+import com.example.lenote.ui.theme.EditorialEmptyState
+import com.example.lenote.ui.theme.EditorialSearchBar
+import com.example.lenote.ui.theme.LeNoteTheme
 import java.io.File
+import java.io.FileOutputStream
 
 /**
- * Painel lateral recolhível (`CollapsibleNavigationSidebar`) para tablets:
- * - Largura reduzida para ~330dp, funcionando como um navegador limpo de páginas;
- * - Botões discretos de edição para Cadernos e Seções;
- * - Miniaturas de página realistas (renderizam traços ou o padrão da folha nativo);
- * - Lista de páginas simplificada (thumbnail + título + tipo de folha + favorito);
- * - Ações secundárias (Mover e Excluir) agrupadas no menu contextual "⋯".
+ * Painel lateral recolhível (`CollapsibleNavigationSidebar`) com estética de Índice / Sumário Editorial:
+ * - Superfície em papel aquecido (`paperBackground`) separada por borda hairline vertical;
+ * - Respeita `statusBarsPadding()` e `navigationBarsPadding()`;
+ * - Barra de busca editorial reutilizável (`EditorialSearchBar`);
+ * - Seletor horizontal de Cadernos e Seções com indicadores de cor de capa;
+ * - Lista de páginas com miniaturas reais de proporção A4, indicador de página ativa e menu contextual;
+ * - Barra de utilidades inferior compacta em uma única linha (Importar PDF, Backup .lenote, Lixeira).
  */
 @Composable
 fun CollapsibleNavigationSidebar(
@@ -157,480 +155,412 @@ fun CollapsibleNavigationSidebar(
         notebookToExport = null
     }
 
-    Surface(
-        modifier = modifier
-            .width(330.dp)
-            .fillMaxHeight()
-            .statusBarsPadding(),
-        color = Color(0xFFFDFDFE),
-        tonalElevation = 2.dp,
-        shadowElevation = 8.dp
-    ) {
-        Column(
+    Row(modifier = modifier.fillMaxHeight()) {
+        Surface(
             modifier = Modifier
-                .fillMaxHeight()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .width(324.dp)
+                .fillMaxHeight(),
+            color = LeNoteTheme.colors.paperBackground,
+            shadowElevation = 10.dp
         ) {
-            // Cabeçalho do Navegador de Páginas
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Fill.Notebook,
-                        contentDescription = "Cadernos",
-                        tint = Color(0xFF1E3A8A),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Cadernos & Páginas",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-                IconButton(
-                    onClick = onClose,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.X,
-                        contentDescription = "Fechar painel",
-                        tint = Color(0xFF475569),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            // Campo de Busca Rápida de Páginas (Alinhamento Vertical e Contraste Aprimorados)
-            Surface(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest
+                    .fillMaxHeight()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = PhosphorIcons.Regular.MagnifyingGlass,
-                        contentDescription = "Buscar",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (searchQuery.isEmpty()) {
-                            Text(
-                                text = "Buscar páginas...",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                )
-                            )
-                        }
-                        BasicTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.updateSearchQuery(it) },
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    if (searchQuery.isNotBlank()) {
-                        IconButton(
-                            onClick = { viewModel.updateSearchQuery("") },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.X,
-                                contentDescription = "Limpar busca",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (searchQuery.isNotBlank()) {
-                Text(
-                    text = "Resultados (${searchResults.size})",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF475569)
-                )
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(searchResults, key = { it.id }) { page ->
-                        PageListItemCard(
-                            page = page,
-                            isSelected = currentPage?.id == page.id,
-                            thumbnailFile = viewModel.getThumbnailFile(page.id),
-                            thumbnailVersion = thumbnailVersion,
-                            onSelect = { viewModel.selectPage(page) },
-                            onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
-                            onRename = {
-                                dialogInputText = page.title
-                                dialogMode = SidebarDialogMode.RenamePage(page)
-                            },
-                            onDuplicate = { viewModel.duplicatePage(page.id) },
-                            onMoveUp = {},
-                            onMoveDown = {},
-                            onChangeTemplate = { pageToChangeTemplate = page },
-                            onDelete = { viewModel.movePageToTrash(page.id) },
-                            showReorderButtons = false
-                        )
-                    }
-                }
-            } else {
-                // 1. Seção de Cadernos (Notebooks)
+                // Cabeçalho Editorial do Sumário
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "CADERNOS (${notebooks.size})",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Column {
+                        Text(
+                            text = "ÍNDICE & SUMÁRIO",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.5.sp,
+                                letterSpacing = 1.sp
+                            ),
+                            color = LeNoteTheme.colors.inkMuted
+                        )
+                        Text(
+                            text = "Cadernos & Folhas",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = LeNoteTheme.colors.inkPrimary
+                        )
+                    }
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(30.dp)
                     ) {
-                        // Ação de editar discreta (ícone lápis)
-                        IconButton(
-                            onClick = {
-                                val curNb = notebooks.find { it.id == selectedNotebookId }
-                                if (curNb != null) {
-                                    dialogInputText = curNb.title
-                                    dialogMode = SidebarDialogMode.RenameNotebook(curNb)
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.PencilSimple,
-                                contentDescription = "Renomear caderno",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Ação minimalista: + Caderno
-                        IconButton(
-                            onClick = {
-                                dialogInputText = ""
-                                dialogMode = SidebarDialogMode.CreateNotebook
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = "Novo caderno",
-                                tint = Color(0xFF1E3A8A),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.X,
+                            contentDescription = "Fechar sumário",
+                            tint = LeNoteTheme.colors.inkSecondary,
+                            modifier = Modifier.size(17.dp)
+                        )
                     }
                 }
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(notebooks, key = { it.id }) { nb ->
-                        val isSelected = nb.id == selectedNotebookId
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectNotebook(nb.id) }
+                // Busca Rápida Editorial
+                EditorialSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = "Buscar folhas ou texto manuscrito..."
+                )
+
+                if (searchQuery.isNotBlank()) {
+                    Text(
+                        text = "RESULTADOS (${searchResults.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LeNoteTheme.colors.inkSecondary
+                    )
+                    if (searchResults.isEmpty()) {
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .background(Color(nb.colorHex), CircleShape)
-                                )
-                                Text(
-                                    text = nb.title,
-                                    fontSize = 11.sp,
-                                    color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines = 1
+                            EditorialEmptyState(
+                                icon = PhosphorIcons.Regular.MagnifyingGlass,
+                                overline = "Busca no Caderno",
+                                title = "Nenhuma folha encontrada",
+                                description = "Nenhum título ou texto manuscrito corresponde a \"$searchQuery\"."
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(searchResults, key = { it.id }) { page ->
+                                PageListItemCard(
+                                    page = page,
+                                    isSelected = currentPage?.id == page.id,
+                                    thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                    thumbnailVersion = thumbnailVersion,
+                                    onSelect = { viewModel.selectPage(page) },
+                                    onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                    onRename = {
+                                        dialogInputText = page.title
+                                        dialogMode = SidebarDialogMode.RenamePage(page)
+                                    },
+                                    onDuplicate = { viewModel.duplicatePage(page.id) },
+                                    onMoveUp = {},
+                                    onMoveDown = {},
+                                    onChangeTemplate = { pageToChangeTemplate = page },
+                                    onDelete = { viewModel.movePageToTrash(page.id) },
+                                    showReorderButtons = false
                                 )
                             }
                         }
                     }
-                }
-
-                HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                // 2. Seção de Divisórias / Seções (Sections)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "SEÇÕES (${sections.size})",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
-                    )
+                } else {
+                    // 1. Seção de Cadernos
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Ação de editar discreta (ícone lápis)
-                        IconButton(
-                            onClick = {
-                                val curSec = sections.find { it.id == selectedSectionId }
-                                if (curSec != null) {
-                                    dialogInputText = curSec.title
-                                    dialogMode = SidebarDialogMode.RenameSection(curSec)
-                                }
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.PencilSimple,
-                                contentDescription = "Renomear seção",
-                                tint = Color(0xFF64748B),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-
-                        // Ação minimalista: + Seção
-                        IconButton(
-                            onClick = {
-                                dialogInputText = ""
-                                dialogMode = SidebarDialogMode.CreateSection
-                            },
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(
-                                imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = "Nova seção",
-                                tint = Color(0xFF1E3A8A),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(sections, key = { it.id }) { sec ->
-                        val isSelected = sec.id == selectedSectionId
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectSection(sec.id) }
-                        ) {
-                            Text(
-                                text = sec.title,
-                                fontSize = 11.sp,
-                                color = if (isSelected) Color(0xFF1E3A8A) else Color(0xFF334155),
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
-                            )
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = Color(0xFFE2E8F0))
-
-                // 3. Seção de Páginas (Pages) + Filtro de Favoritas
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (showFavoritesOnly) "FAVORITAS (${favoritePages.size})" else "PÁGINAS (${pages.size})",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B)
+                            text = "CADERNOS (${notebooks.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LeNoteTheme.colors.inkMuted
                         )
-                        TextButton(
-                            onClick = { showFavoritesOnly = !showFavoritesOnly },
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 1.dp),
-                            modifier = Modifier.height(26.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = if (showFavoritesOnly) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                                contentDescription = "Filtrar favoritas",
-                                tint = if (showFavoritesOnly) Color(0xFFD97706) else Color(0xFF64748B),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = if (showFavoritesOnly) "Todas" else "Favoritas",
-                                fontSize = 10.sp,
-                                color = Color(0xFF64748B)
-                            )
+                            IconButton(
+                                onClick = {
+                                    val curNb = notebooks.find { it.id == selectedNotebookId }
+                                    if (curNb != null) {
+                                        dialogInputText = curNb.title
+                                        dialogMode = SidebarDialogMode.RenameNotebook(curNb)
+                                    }
+                                },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.PencilSimple,
+                                    contentDescription = "Renomear caderno",
+                                    tint = LeNoteTheme.colors.inkSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    dialogInputText = ""
+                                    dialogMode = SidebarDialogMode.CreateNotebook
+                                },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.Plus,
+                                    contentDescription = "Novo caderno",
+                                    tint = LeNoteTheme.colors.accentPrimary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
                         }
                     }
 
-                    // Ação principal evidente: + Página
-                    Button(
-                        onClick = { showCreatePageTemplateDialog = true },
-                        shape = RoundedCornerShape(6.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                        modifier = Modifier.height(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF1E3A8A),
-                            contentColor = Color.White
-                        )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(
-                            imageVector = PhosphorIcons.Regular.Plus,
-                            contentDescription = "Nova página",
-                            modifier = Modifier.size(12.dp)
+                        items(notebooks, key = { it.id }) { nb ->
+                            val isSelected = nb.id == selectedNotebookId
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) LeNoteTheme.colors.elevatedSurface else LeNoteTheme.colors.tonalSurface.copy(alpha = 0.6f),
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.hairlineBorder
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.selectNotebook(nb.id) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .background(Color(nb.colorHex), CircleShape)
+                                    )
+                                    Text(
+                                        text = nb.title,
+                                        style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.5.sp),
+                                        color = if (isSelected) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkSecondary,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+
+                    // 2. Seção de Divisórias / Seções
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "SEÇÕES (${sections.size})",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LeNoteTheme.colors.inkMuted
                         )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("Página", fontSize = 11.sp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = {
+                                    val curSec = sections.find { it.id == selectedSectionId }
+                                    if (curSec != null) {
+                                        dialogInputText = curSec.title
+                                        dialogMode = SidebarDialogMode.RenameSection(curSec)
+                                    }
+                                },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.PencilSimple,
+                                    contentDescription = "Renomear seção",
+                                    tint = LeNoteTheme.colors.inkSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    dialogInputText = ""
+                                    dialogMode = SidebarDialogMode.CreateSection
+                                },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = PhosphorIcons.Regular.Plus,
+                                    contentDescription = "Nova seção",
+                                    tint = LeNoteTheme.colors.accentPrimary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(sections, key = { it.id }) { sec ->
+                            val isSelected = sec.id == selectedSectionId
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) LeNoteTheme.colors.accentPrimaryContainer else Color.Transparent,
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = if (isSelected) LeNoteTheme.colors.accentPrimary.copy(alpha = 0.4f) else LeNoteTheme.colors.hairlineBorder
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.selectSection(sec.id) }
+                            ) {
+                                Text(
+                                    text = sec.title,
+                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.5.sp),
+                                    color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.inkSecondary,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+
+                    // 3. Seção de Folhas (Pages) + Filtro de Favoritas + Botão Nova Folha
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (showFavoritesOnly) "FAVORITAS (${favoritePages.size})" else "FOLHAS (${pages.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = LeNoteTheme.colors.inkMuted
+                            )
+                            Surface(
+                                onClick = { showFavoritesOnly = !showFavoritesOnly },
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (showFavoritesOnly) LeNoteTheme.colors.accentWarmContainer else LeNoteTheme.colors.tonalSurface,
+                                border = BorderStroke(1.dp, LeNoteTheme.colors.hairlineBorder)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showFavoritesOnly) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
+                                        contentDescription = "Filtrar favoritas",
+                                        tint = if (showFavoritesOnly) LeNoteTheme.colors.goldStar else LeNoteTheme.colors.inkSecondary,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Text(
+                                        text = if (showFavoritesOnly) "Todas" else "Estrelas",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                        color = LeNoteTheme.colors.inkSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        EditorialActionChip(
+                            label = "Nova Folha",
+                            icon = PhosphorIcons.Regular.Plus,
+                            onClick = { showCreatePageTemplateDialog = true },
+                            isPrimary = true
+                        )
+                    }
+
+                    val displayedPages = if (showFavoritesOnly) favoritePages else pages
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp)
+                    ) {
+                        items(displayedPages, key = { it.id }) { page ->
+                            PageListItemCard(
+                                page = page,
+                                isSelected = currentPage?.id == page.id,
+                                thumbnailFile = viewModel.getThumbnailFile(page.id),
+                                thumbnailVersion = thumbnailVersion,
+                                onSelect = { viewModel.selectPage(page) },
+                                onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
+                                onRename = {
+                                    dialogInputText = page.title
+                                    dialogMode = SidebarDialogMode.RenamePage(page)
+                                },
+                                onDuplicate = { viewModel.duplicatePage(page.id) },
+                                onMoveUp = { viewModel.movePageOrder(page.id, moveUp = true) },
+                                onMoveDown = { viewModel.movePageOrder(page.id, moveUp = false) },
+                                onChangeTemplate = { pageToChangeTemplate = page },
+                                onDelete = { viewModel.movePageToTrash(page.id) },
+                                showReorderButtons = !showFavoritesOnly
+                            )
+                        }
                     }
                 }
 
-                val displayedPages = if (showFavoritesOnly) favoritePages else pages
+                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Barra Utilitária Inferior Compacta em Linha Única
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    items(displayedPages, key = { it.id }) { page ->
-                        PageListItemCard(
-                            page = page,
-                            isSelected = currentPage?.id == page.id,
-                            thumbnailFile = viewModel.getThumbnailFile(page.id),
-                            thumbnailVersion = thumbnailVersion,
-                            onSelect = { viewModel.selectPage(page) },
-                            onToggleFavorite = { viewModel.togglePageFavorite(page.id) },
-                            onRename = {
-                                dialogInputText = page.title
-                                dialogMode = SidebarDialogMode.RenamePage(page)
-                            },
-                            onDuplicate = { viewModel.duplicatePage(page.id) },
-                            onMoveUp = { viewModel.movePageOrder(page.id, moveUp = true) },
-                            onMoveDown = { viewModel.movePageOrder(page.id, moveUp = false) },
-                            onChangeTemplate = { pageToChangeTemplate = page },
-                            onDelete = { viewModel.movePageToTrash(page.id) },
-                            showReorderButtons = !showFavoritesOnly
-                        )
-                    }
+                    EditorialActionChip(
+                        label = "PDF",
+                        icon = PhosphorIcons.Regular.FilePdf,
+                        onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    EditorialActionChip(
+                        label = "Backup",
+                        icon = PhosphorIcons.Regular.Export,
+                        onClick = {
+                            val currentNb = notebooks.find { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
+                            if (currentNb != null) {
+                                notebookToExport = currentNb
+                                val safeTitle = currentNb.title.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                                lenoteExportLauncher.launch("$safeTitle.lenote")
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    val trashCount = deletedNotebooks.size + deletedPages.size
+                    EditorialActionChip(
+                        label = "Lixeira ($trashCount)",
+                        icon = PhosphorIcons.Regular.Trash,
+                        onClick = { showTrashDialog = true },
+                        isDestructive = trashCount > 0,
+                        modifier = Modifier.weight(1.2f)
+                    )
                 }
-            }
-
-            HorizontalDivider(color = Color(0xFFE2E8F0))
-
-            // Ação de Importar PDF
-            OutlinedButton(
-                onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.FilePdf,
-                    contentDescription = "Importar PDF",
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Importar PDF", fontSize = 11.sp)
-            }
-
-            // Exportar Caderno Ativo (.lenote)
-            OutlinedButton(
-                onClick = {
-                    val currentNb = notebooks.find { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
-                    if (currentNb != null) {
-                        notebookToExport = currentNb
-                        val safeTitle = currentNb.title.replace(Regex("[^a-zA-Z0-9_]"), "_")
-                        lenoteExportLauncher.launch("$safeTitle.lenote")
-                    }
-                },
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Export,
-                    contentDescription = "Exportar caderno",
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Exportar Caderno (.lenote)", fontSize = 11.sp)
-            }
-
-            // Botão Lixeira
-            OutlinedButton(
-                onClick = { showTrashDialog = true },
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = if (deletedNotebooks.isNotEmpty() || deletedPages.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-            ) {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Trash,
-                    contentDescription = "Lixeira",
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Lixeira (${deletedNotebooks.size + deletedPages.size})",
-                    fontSize = 11.sp
-                )
             }
         }
+
+        // Borda vertical hairline direita da barra lateral
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(LeNoteTheme.colors.hairlineBorder)
+        )
     }
 
-    // Diálogos para Criar / Renomear Caderno, Seção ou Página
     // Diálogo da Lixeira na Barra Lateral
     if (showTrashDialog) {
         AlertDialog(
             onDismissRequest = { showTrashDialog = false },
+            containerColor = LeNoteTheme.colors.elevatedSurface,
             title = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -641,8 +571,16 @@ fun CollapsibleNavigationSidebar(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(imageVector = PhosphorIcons.Regular.Trash, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                        Text("Lixeira do Aplicativo", fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.Trash,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "Lixeira do Aplicativo",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = LeNoteTheme.colors.inkPrimary
+                        )
                     }
                     if (deletedNotebooks.isNotEmpty() || deletedPages.isNotEmpty()) {
                         TextButton(
@@ -655,7 +593,11 @@ fun CollapsibleNavigationSidebar(
                 }
             },
             text = {
-                Box(modifier = Modifier.fillMaxWidth().height(360.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                ) {
                     TrashContent(
                         deletedNotebooks = deletedNotebooks,
                         deletedPages = deletedPages,
@@ -668,7 +610,7 @@ fun CollapsibleNavigationSidebar(
             },
             confirmButton = {
                 TextButton(onClick = { showTrashDialog = false }) {
-                    Text("Fechar")
+                    Text("Fechar", color = LeNoteTheme.colors.inkPrimary)
                 }
             }
         )
@@ -677,7 +619,8 @@ fun CollapsibleNavigationSidebar(
     if (showEmptyTrashConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showEmptyTrashConfirmDialog = false },
-            title = { Text("Esvaziar Lixeira?") },
+            containerColor = LeNoteTheme.colors.elevatedSurface,
+            title = { Text("Esvaziar Lixeira?", style = MaterialTheme.typography.titleLarge) },
             text = { Text("Todos os cadernos e páginas na lixeira serão excluídos permanentemente.") },
             confirmButton = {
                 Button(
@@ -702,7 +645,8 @@ fun CollapsibleNavigationSidebar(
         val nb = notebookToDeletePermanently!!
         AlertDialog(
             onDismissRequest = { notebookToDeletePermanently = null },
-            title = { Text("Excluir Caderno?") },
+            containerColor = LeNoteTheme.colors.elevatedSurface,
+            title = { Text("Excluir Caderno?", style = MaterialTheme.typography.titleLarge) },
             text = { Text("O caderno '${nb.title}' será excluído definitivamente.") },
             confirmButton = {
                 Button(
@@ -727,7 +671,8 @@ fun CollapsibleNavigationSidebar(
         val p = pageToDeletePermanently!!
         AlertDialog(
             onDismissRequest = { pageToDeletePermanently = null },
-            title = { Text("Excluir Página?") },
+            containerColor = LeNoteTheme.colors.elevatedSurface,
+            title = { Text("Excluir Página?", style = MaterialTheme.typography.titleLarge) },
             text = { Text("A página '${p.title}' será excluída definitivamente.") },
             confirmButton = {
                 Button(
@@ -777,7 +722,7 @@ fun CollapsibleNavigationSidebar(
             isCreateMode = false,
             onConfirm = { _, bg, paperColor ->
                 pageToChangeTemplate = null
-                viewModel.changePageTemplate(bg, paperColor)
+                viewModel.changePageTemplateFor(targetPage.id, bg, paperColor)
             },
             onDismiss = { pageToChangeTemplate = null }
         )
@@ -790,18 +735,31 @@ fun CollapsibleNavigationSidebar(
             is SidebarDialogMode.RenameNotebook -> "Renomear Caderno"
             is SidebarDialogMode.CreateSection -> "Nova Seção"
             is SidebarDialogMode.RenameSection -> "Renomear Seção"
-            is SidebarDialogMode.RenamePage -> "Renomear Página"
+            is SidebarDialogMode.RenamePage -> "Renomear Folha"
         }
 
         AlertDialog(
             onDismissRequest = { dialogMode = null },
-            title = { Text(titleText, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
+            containerColor = LeNoteTheme.colors.elevatedSurface,
+            title = {
+                Text(
+                    text = titleText,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = LeNoteTheme.colors.inkPrimary
+                )
+            },
             text = {
                 OutlinedTextField(
                     value = dialogInputText,
                     onValueChange = { dialogInputText = it },
                     singleLine = true,
-                    placeholder = { Text("Digite o nome...") }
+                    placeholder = { Text("Digite o nome...") },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LeNoteTheme.colors.accentPrimary,
+                        unfocusedBorderColor = LeNoteTheme.colors.hairlineBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
@@ -815,7 +773,12 @@ fun CollapsibleNavigationSidebar(
                             is SidebarDialogMode.RenamePage -> viewModel.renamePage(activeDialog.page.id, dialogInputText)
                         }
                         dialogMode = null
-                    }
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LeNoteTheme.colors.accentPrimary,
+                        contentColor = Color.White
+                    )
                 ) {
                     Text("Confirmar")
                 }
@@ -842,7 +805,7 @@ fun CollapsibleNavigationSidebar(
                         }
                     }
                     TextButton(onClick = { dialogMode = null }) {
-                        Text("Cancelar")
+                        Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
                     }
                 }
             }
@@ -859,8 +822,8 @@ private sealed interface SidebarDialogMode {
 }
 
 /**
- * Item de página limpo e elegante com miniatura realista, título, tipo de folha, favorito
- * e menu contextual "⋯" para ações secundárias (Mover e Excluir).
+ * Item de página editorial com miniatura realista, título, tipo de folha, favorito
+ * e menu contextual "⋮" para ações secundárias.
  */
 @Composable
 private fun PageListItemCard(
@@ -888,50 +851,51 @@ private fun PageListItemCard(
         }
     }
 
-    Card(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onSelect() },
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
-        )
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) LeNoteTheme.colors.elevatedSurface else Color.Transparent,
+        border = if (isSelected) BorderStroke(1.dp, LeNoteTheme.colors.accentPrimary.copy(alpha = 0.5f)) else null
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(6.dp),
+                .padding(7.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // 1. Miniatura da Página (Thumbnail de alta qualidade com padrão de folha ou traços)
+            // 1. Miniatura da Folha
             PageThumbnailPreview(
                 pageBackground = page.pageBackground,
                 paperColorLong = page.paperColor,
                 bitmap = thumbBitmap,
-                modifier = Modifier.size(width = 46.dp, height = 62.dp)
+                modifier = Modifier.size(width = 44.dp, height = 58.dp)
             )
 
-            // 2. Metadados Principais (Título + Tipo de Folha)
-            Column(modifier = Modifier.weight(1f)) {
+            // 2. Metadados Principais
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Text(
                     text = page.title,
-                    fontSize = 12.sp,
-                    color = Color(0xFF0F172A),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = LeNoteTheme.colors.inkPrimary,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = page.pageBackground.label,
-                    fontSize = 10.sp,
-                    color = Color(0xFF64748B)
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = LeNoteTheme.colors.inkMuted
                 )
             }
 
-            // 3. Botão de Favorito Direto
+            // 3. Favorito
             IconButton(
                 onClick = onToggleFavorite,
                 modifier = Modifier.size(28.dp)
@@ -939,12 +903,12 @@ private fun PageListItemCard(
                 Icon(
                     imageVector = if (page.isFavorite) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
                     contentDescription = if (page.isFavorite) "Desfavoritar" else "Favoritar",
-                    tint = if (page.isFavorite) Color(0xFFD97706) else Color(0xFF94A3B8),
+                    tint = if (page.isFavorite) LeNoteTheme.colors.goldStar else LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.size(15.dp)
                 )
             }
 
-            // 4. Menu Contextual "⋯" para Ações Secundárias (Renomear, Duplicar, Mover e Excluir)
+            // 4. Menu Contextual "⋮"
             Box {
                 IconButton(
                     onClick = { isContextMenuOpen = true },
@@ -953,22 +917,23 @@ private fun PageListItemCard(
                     Icon(
                         imageVector = PhosphorIcons.Regular.DotsThreeVertical,
                         contentDescription = "Mais ações da página",
-                        tint = Color(0xFF64748B),
+                        tint = LeNoteTheme.colors.inkSecondary,
                         modifier = Modifier.size(16.dp)
                     )
                 }
 
                 DropdownMenu(
                     expanded = isContextMenuOpen,
-                    onDismissRequest = { isContextMenuOpen = false }
+                    onDismissRequest = { isContextMenuOpen = false },
+                    containerColor = LeNoteTheme.colors.elevatedSurface
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Renomear", fontSize = 12.sp) },
+                        text = { Text("Renomear", style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.PencilSimple,
                                 contentDescription = null,
-                                tint = Color(0xFF475569),
+                                tint = LeNoteTheme.colors.inkSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                         },
@@ -979,12 +944,12 @@ private fun PageListItemCard(
                     )
 
                     DropdownMenuItem(
-                        text = { Text("Duplicar", fontSize = 12.sp) },
+                        text = { Text("Duplicar", style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Copy,
                                 contentDescription = null,
-                                tint = Color(0xFF475569),
+                                tint = LeNoteTheme.colors.inkSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                         },
@@ -996,12 +961,12 @@ private fun PageListItemCard(
 
                     if (showReorderButtons) {
                         DropdownMenuItem(
-                            text = { Text("Mover para cima", fontSize = 12.sp) },
+                            text = { Text("Mover para cima", style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.CaretUp,
                                     contentDescription = null,
-                                    tint = Color(0xFF475569),
+                                    tint = LeNoteTheme.colors.inkSecondary,
                                     modifier = Modifier.size(16.dp)
                                 )
                             },
@@ -1011,12 +976,12 @@ private fun PageListItemCard(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Mover para baixo", fontSize = 12.sp) },
+                            text = { Text("Mover para baixo", style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.CaretDown,
                                     contentDescription = null,
-                                    tint = Color(0xFF475569),
+                                    tint = LeNoteTheme.colors.inkSecondary,
                                     modifier = Modifier.size(16.dp)
                                 )
                             },
@@ -1027,15 +992,15 @@ private fun PageListItemCard(
                         )
                     }
 
-                    HorizontalDivider(color = Color(0xFFE2E8F0))
+                    HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
 
                     DropdownMenuItem(
-                        text = { Text("Alterar Modelo de Fundo", fontSize = 12.sp) },
+                        text = { Text("Modelo e Cor do Papel", style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.SlidersHorizontal,
                                 contentDescription = null,
-                                tint = Color(0xFF475569),
+                                tint = LeNoteTheme.colors.inkSecondary,
                                 modifier = Modifier.size(16.dp)
                             )
                         },
@@ -1049,7 +1014,7 @@ private fun PageListItemCard(
                         text = {
                             Text(
                                 text = "Mover para Lixeira",
-                                fontSize = 12.sp,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error
                             )
                         },
@@ -1074,7 +1039,6 @@ private fun PageListItemCard(
 
 /**
  * Renderização gráfica de miniatura com proporção de folha real.
- * Renderiza os traços salvos (se disponíveis) ou o padrão da folha (pautada, quadriculada, etc.) nativamente.
  */
 @Composable
 private fun PageThumbnailPreview(
@@ -1088,8 +1052,7 @@ private fun PageThumbnailPreview(
         modifier = modifier,
         shape = RoundedCornerShape(4.dp),
         color = Color(paperColorLong.toInt()),
-        border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
-        shadowElevation = 1.dp
+        border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else LeNoteTheme.colors.hairlineBorder)
     ) {
         if (bitmap != null) {
             Image(

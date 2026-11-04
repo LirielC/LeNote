@@ -45,6 +45,12 @@ class AppPreferences(context: Context) {
             prefs.edit().putString(KEY_THEME_MODE, value.name).apply()
         }
 
+    var isTouchInkingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_TOUCH_INKING_ENABLED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_TOUCH_INKING_ENABLED, value).apply()
+        }
+
     var isSidebarGridView: Boolean
         get() = prefs.getBoolean(KEY_SIDEBAR_GRID_VIEW, false)
         set(value) {
@@ -55,6 +61,7 @@ class AppPreferences(context: Context) {
         private const val PREFS_NAME = "lenote_user_preferences"
         private const val KEY_TOOLBAR_DOCK_EDGE = "toolbar_dock_edge"
         private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_TOUCH_INKING_ENABLED = "touch_inking_enabled"
         private const val KEY_SIDEBAR_GRID_VIEW = "sidebar_grid_view"
     }
 }
