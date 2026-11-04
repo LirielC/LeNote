@@ -56,6 +56,20 @@ android {
             )
         }
     }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        // Edição 100% FOSS para F-Droid e IzzyOnDroid (zero ML Kit / GMS / Firebase)
+        create("foss") {
+            dimension = "edition"
+            isDefault = true
+        }
+        // Edição Full com Google ML Kit Digital Ink Recognition (OCR de caligrafia para fonte)
+        create("full") {
+            dimension = "edition"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -88,6 +102,9 @@ dependencies {
     implementation(libs.androidx.ink.rendering)
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
+
+    // Google ML Kit Digital Ink Recognition (exclusivo da edição "full", ausente na "foss")
+    "fullImplementation"(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")

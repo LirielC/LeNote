@@ -329,7 +329,25 @@ class InkPlaygroundViewModel : ViewModel() {
     private suspend fun indexCurrentPageHandwriting() {
         val page = _currentPage.value ?: return
         val repo = repository ?: return
-        // Indexa o conteúdo das caixas de texto da página no SQLite FTS5 (100% offline e FOSS)
+        val strokes = engine.getFinishedStrokesSnapshot()
+        val inkMgr = digitalInkManager
+
+        // Se houver traços e o motor OCR reconhecer texto (ex: flavor 'full' com ML Kit), indexa;
+        // caso contrário (ou no flavor 'foss'), indexa as caixas de texto presentes na página.
+        val ocrResult = if (strokes.isNotEmpty() && inkMgr != null) {
+            inkMgr.recognizeStrokes(strokes).getOrNull()
+        } else {
+            null
+        }
+
+        if (ocrResult != null && ocrResult.fullText.isNotBlank()) {
+            val boxesJson = WordBoxJsonSerializer.serialize(ocrResult.wordBoxes)
+            withContext(Dispatchers.IO) {
+                repo.indexPageHandwriting(page.id, ocrResult.fullText, boxesJson)
+            }
+            return
+        }
+
         val combinedText = _textBlocks.value
             .map { it.text.trim() }
             .filter { it.isNotEmpty() }
@@ -893,8 +911,11 @@ class InkPlaygroundViewModel : ViewModel() {
     }
 
     /**
-     * Ação "Embelezar Caligrafia": refina geometricamente os traços selecionados (suavização caligráfica
-     * + alinhamento de linha de base) preservando os traços vetoriais 100% offline.
+     * Ação "Embelezar Caligrafia":
+     * - No flavor `full` (com ML Kit), reconhece o texto manuscrito e o converte em uma caixa de texto
+     *   com fonte elegante preservando cor, tamanho e posição.
+     * - No flavor `foss` (ou caso o modelo OCR ainda não esteja disponível), refina geometricamente
+     *   os traços vetoriais e alinha à linha de base 100% offline.
      */
     suspend fun beautifySelectedStrokesWithFont(): Result<String> {
         val selected = engine.getSelectedStrokesSnapshot()
@@ -903,6 +924,41 @@ class InkPlaygroundViewModel : ViewModel() {
         }
         val inkMgr = digitalInkManager
         val ocrResult = inkMgr?.recognizeStrokes(selected)?.getOrNull()
+        val recognizedText = ocrResult?.fullText?.trim().orEmpty()
+        val curPage = _currentPage.value
+
+        if (recognizedText.isNotEmpty() && curPage != null) {
+            val bounds = engine.state.value.selectionBoundsWorld
+            val worldX = bounds?.xMin ?: 100f
+            val worldY = bounds?.yMin ?: 100f
+            val boxWidth = Math.max(160f, ((bounds?.let { it.xMax - it.xMin }) ?: 200f) + 30f)
+            val boxHeight = Math.max(60f, ((bounds?.let { it.yMax - it.yMin }) ?: 60f) + 10f)
+
+            val sampleBrush = selected.firstOrNull()?.brush
+            val textColor = sampleBrush?.colorIntArgb ?: 0xFF0F172A.toInt()
+            val calculatedFontSize = (Math.max(16f, ((bounds?.let { it.yMax - it.yMin }) ?: 40f) * 0.55f)).coerceIn(16f, 72f)
+
+            val textBlock = com.example.lenote.data.CanvasTextBlock(
+                id = java.util.UUID.randomUUID().toString(),
+                pageId = curPage.id,
+                text = recognizedText,
+                x = worldX,
+                y = worldY,
+                width = boxWidth,
+                height = boxHeight,
+                textColor = textColor,
+                fontSize = calculatedFontSize,
+                zIndex = (_textBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
+            )
+
+            repository?.upsertTextBlock(textBlock)
+            _textBlocks.value = repository?.getTextBlocks(curPage.id) ?: emptyList()
+
+            engine.deleteSelectedStrokes()
+            scheduleAutoSave()
+            return Result.success(recognizedText)
+        }
+
         val wordBottoms = ocrResult?.wordBoxes?.map { it.bottom }.orEmpty()
         val bounds = engine.state.value.selectionBoundsWorld
         val effectiveBottoms = if (wordBottoms.isNotEmpty()) wordBottoms else listOfNotNull(bounds?.yMax)

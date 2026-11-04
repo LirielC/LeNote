@@ -28,16 +28,17 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest
+        run: ./gradlew testFossDebugUnitTest testFullDebugUnitTest
 
-      - name: Build Release & Debug APKs
-        run: ./gradlew assembleRelease assembleDebug
+      - name: Build FOSS & Full Release APKs
+        run: ./gradlew assembleFossRelease assembleFullRelease
 
       - name: Rename APKs for Release
         run: |
-          TAG_NAME="${GITHUB_REF_NAME:-v1.0.1}"
-          cp app/build/outputs/apk/release/app-release.apk "LeNote-${TAG_NAME}-release.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "LeNote-${TAG_NAME}-debug.apk"
+          TAG_NAME="${GITHUB_REF_NAME:-v1.0.2}"
+          cp app/build/outputs/apk/foss/release/app-foss-release.apk "LeNote-${TAG_NAME}-release.apk"
+          cp app/build/outputs/apk/foss/release/app-foss-release.apk "LeNote-${TAG_NAME}-foss-release.apk"
+          cp app/build/outputs/apk/full/release/app-full-release.apk "LeNote-${TAG_NAME}-full-release.apk"
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
@@ -45,7 +46,6 @@ jobs:
           name: LeNote-APKs
           path: |
             LeNote-*-release.apk
-            LeNote-*-debug.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -53,5 +53,4 @@ jobs:
         with:
           files: |
             LeNote-*-release.apk
-            LeNote-*-debug.apk
           generate_release_notes: true

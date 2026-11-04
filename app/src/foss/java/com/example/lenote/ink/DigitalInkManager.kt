@@ -20,7 +20,7 @@ data class DigitalInkRecognitionResult(
 )
 
 /**
- * Gerenciador 100% FOSS e offline de análise geométrica de traços manuscritos.
+ * Gerenciador 100% FOSS e offline de análise geométrica de traços manuscritos (Flavor `foss`).
  * Opera exclusivamente com geometria local dos [Stroke]s do Jetpack Ink, sem dependências
  * proprietárias de rede, GMS, Firebase ou ML Kit.
  */
@@ -84,7 +84,6 @@ class DigitalInkManager(
                 return@withContext Result.success(DigitalInkRecognitionResult("", emptyList()))
             }
 
-            // Ordena da esquerda para a direita e agrupa traços próximos em caixas de palavras
             val sorted = strokeBoundsList.sortedBy { it.left }
             val wordBoxes = mutableListOf<RecognizedWordBox>()
             var curLeft = sorted[0].left
