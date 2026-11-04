@@ -1731,6 +1731,35 @@ class InkPlaygroundVerificationTest {
         assertEquals(1, inkEngine.state.value.strokeCount)
         assertEquals(whiteColor, inkEngine.getFinishedStrokesSnapshot().first().brush.colorIntArgb)
         assertEquals(1, finishedView.getRenderedStrokeCount())
+
+        // 3. Verifica que o alinhamento de linha de base e o embelezamento caligráfico 100% FOSS funcionam sobre a seleção
+        instrumentation.runOnMainSync {
+            inkEngine.setTool(InkingTool.Lasso)
+            val downTime = SystemClock.uptimeMillis()
+            val lassoPts = listOf(
+                Pair(150f, 220f),
+                Pair(510f, 220f),
+                Pair(510f, 300f),
+                Pair(150f, 300f),
+                Pair(150f, 220f)
+            )
+            val downEv = obtainSinglePointerEvent(downTime, downTime, MotionEvent.ACTION_DOWN, 0, MotionEvent.TOOL_TYPE_STYLUS, lassoPts[0].first, lassoPts[0].second)
+            inkEngine.onTouchEvent(downEv)
+            downEv.recycle()
+            for (i in 1 until lassoPts.size) {
+                val moveEv = obtainSinglePointerEvent(downTime, downTime + i * 10L, MotionEvent.ACTION_MOVE, 0, MotionEvent.TOOL_TYPE_STYLUS, lassoPts[i].first, lassoPts[i].second)
+                inkEngine.onTouchEvent(moveEv)
+                moveEv.recycle()
+            }
+            val upEv = obtainSinglePointerEvent(downTime, downTime + 80L, MotionEvent.ACTION_UP, 0, MotionEvent.TOOL_TYPE_STYLUS, lassoPts.last().first, lassoPts.last().second)
+            inkEngine.onTouchEvent(upEv)
+            upEv.recycle()
+        }
+        assertEquals(1, inkEngine.state.value.selectedStrokeCount)
+
+        val beautifyRes = kotlinx.coroutines.runBlocking { vm.beautifySelectedStrokesWithFont() }
+        assertTrue("Beautify 100% FOSS deve ter sucesso", beautifyRes.isSuccess)
+        assertEquals(1, inkEngine.state.value.strokeCount)
     }
 }
 
