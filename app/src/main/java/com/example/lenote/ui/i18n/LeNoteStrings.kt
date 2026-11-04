@@ -523,18 +523,18 @@ val PtStrings = LeNoteStrings(
             PageBackground.GRID -> "Quadriculada"
             PageBackground.DOTS -> "Pontilhada"
             PageBackground.MATHEMATICS -> "Matemática"
-            PageBackground.CORNELL -> "Método Cornell"
-            PageBackground.WEEKLY_PLANNER -> "Planner Semanal"
-            PageBackground.ENGINEERING_GRAPH -> "Papel Engenharia"
-            PageBackground.MUSIC_STAFF -> "Partitura Musical"
+            PageBackground.CORNELL -> "Cornell"
+            PageBackground.WEEKLY_PLANNER -> "Planner"
+            PageBackground.ENGINEERING_GRAPH -> "Engenharia"
+            PageBackground.MUSIC_STAFF -> "Partitura"
         }
     },
     paperColorLabel = { colorLong ->
         when (colorLong) {
             PaperColors.CLASSIC_WHITE -> "Branco"
-            PaperColors.LEGAL_YELLOW -> "Amarelo Legal"
+            PaperColors.LEGAL_YELLOW -> "Amarelo"
             PaperColors.SEPIA_CREAM -> "Sépia Suave"
-            PaperColors.OLED_BLACK -> "Grafite OLED"
+            PaperColors.OLED_BLACK -> "Grafite"
             else -> "Branco"
         }
     },
@@ -793,8 +793,8 @@ val EnStrings = LeNoteStrings(
             PageBackground.GRID -> "Grid"
             PageBackground.DOTS -> "Dotted"
             PageBackground.MATHEMATICS -> "Mathematics"
-            PageBackground.CORNELL -> "Cornell Notes"
-            PageBackground.WEEKLY_PLANNER -> "Weekly Planner"
+            PageBackground.CORNELL -> "Cornell"
+            PageBackground.WEEKLY_PLANNER -> "Planner"
             PageBackground.ENGINEERING_GRAPH -> "Engineering"
             PageBackground.MUSIC_STAFF -> "Music Staff"
         }
@@ -804,7 +804,7 @@ val EnStrings = LeNoteStrings(
             PaperColors.CLASSIC_WHITE -> "White"
             PaperColors.LEGAL_YELLOW -> "Legal Yellow"
             PaperColors.SEPIA_CREAM -> "Soft Sepia"
-            PaperColors.OLED_BLACK -> "OLED Graphite"
+            PaperColors.OLED_BLACK -> "Graphite"
             else -> "White"
         }
     },
@@ -1037,7 +1037,7 @@ val EsStrings = LeNoteStrings(
     sidebarFilterAll = "Todas",
     sidebarFilterStars = "Estrellas",
     sidebarNewSheetButton = "Nueva Hoja",
-    sidebarTrashButton = { c -> "Papelera ($c)" },
+    sidebarTrashButton = { c -> "Papelera" },
     sidebarTrashDialogTitle = "Papelera de la Aplicación",
     sidebarEmptyAction = "Vaciar",
     sidebarRenameNotebookTitle = "Renombrar Cuaderno",
@@ -1063,18 +1063,18 @@ val EsStrings = LeNoteStrings(
             PageBackground.GRID -> "Cuadriculada"
             PageBackground.DOTS -> "Punteada"
             PageBackground.MATHEMATICS -> "Matemáticas"
-            PageBackground.CORNELL -> "Método Cornell"
+            PageBackground.CORNELL -> "Cornell"
             PageBackground.WEEKLY_PLANNER -> "Planificador"
-            PageBackground.ENGINEERING_GRAPH -> "Papel Ingeniería"
+            PageBackground.ENGINEERING_GRAPH -> "Ingeniería"
             PageBackground.MUSIC_STAFF -> "Pentagrama"
         }
     },
     paperColorLabel = { colorLong ->
         when (colorLong) {
             PaperColors.CLASSIC_WHITE -> "Blanco"
-            PaperColors.LEGAL_YELLOW -> "Amarillo Legal"
+            PaperColors.LEGAL_YELLOW -> "Amarillo"
             PaperColors.SEPIA_CREAM -> "Sepia Suave"
-            PaperColors.OLED_BLACK -> "Grafito OLED"
+            PaperColors.OLED_BLACK -> "Grafito"
             else -> "Blanco"
         }
     },

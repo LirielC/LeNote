@@ -19,7 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.lenote.data.ThemeMode
@@ -39,13 +39,16 @@ enum class AppDestination {
 class MainActivity : ComponentActivity() {
 
     val playgroundViewModel: InkPlaygroundViewModel by viewModels()
+    var navigateToDestination: ((AppDestination) -> Unit)? = null
+        private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         playgroundViewModel.initializeIfNeeded(applicationContext)
         enableEdgeToEdge()
         setContent {
-            var currentScreen by remember { mutableStateOf(AppDestination.HOME) }
+            var currentScreen by rememberSaveable { mutableStateOf(AppDestination.HOME) }
+            navigateToDestination = { dest -> currentScreen = dest }
             val themeMode by playgroundViewModel.themeMode.collectAsState()
             val appLanguage by playgroundViewModel.appLanguage.collectAsState()
             val isDarkMode = themeMode == ThemeMode.DARK

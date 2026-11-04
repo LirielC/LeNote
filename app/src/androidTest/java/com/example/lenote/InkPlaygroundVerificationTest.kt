@@ -330,13 +330,17 @@ class InkPlaygroundVerificationTest {
             val evMove = obtainSinglePointerEvent(downTime, downTime + 20L, MotionEvent.ACTION_MOVE, 0, MotionEvent.TOOL_TYPE_FINGER, 300f, 100f)
             val evUp = obtainSinglePointerEvent(downTime, downTime + 40L, MotionEvent.ACTION_UP, 0, MotionEvent.TOOL_TYPE_FINGER, 300f, 100f)
 
+            engine.onTouchEvent(evDown)
+            engine.onTouchEvent(evMove)
             assertTrue(
                 engine.state.value.gestureState == GestureInputState.SINGLE_FINGER_PAN ||
                 engine.state.value.gestureState == GestureInputState.SINGLE_FINGER_IGNORED
             )
+            engine.onTouchEvent(evUp)
 
             evDown.recycle(); evMove.recycle(); evUp.recycle()
             inProgressView.requestHandoff()
+            engine.setCameraTransform(1.0f, 0f, 0f)
         }
         Thread.sleep(100)
         assertEquals("Toque de dedo isolado nunca deve criar traço", 0, engine.state.value.strokeCount)
@@ -553,7 +557,6 @@ class InkPlaygroundVerificationTest {
         }
 
         fun prepareActivityAndGetViews(): Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView> {
-            var result: Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView>? = null
             activityRule.scenario.onActivity { activity ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     activity.setShowWhenLocked(true)
@@ -566,6 +569,13 @@ class InkPlaygroundVerificationTest {
                         WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                         WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
                 )
+                activity.navigateToDestination?.invoke(AppDestination.CANVAS)
+            }
+            instrumentation.waitForIdleSync()
+            Thread.sleep(350)
+
+            var result: Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView>? = null
+            activityRule.scenario.onActivity { activity ->
                 val decor = activity.window.decorView
                 val inProgress = findViewByTagRecursively(decor, "InProgressStrokesView") as? InProgressStrokesView
                 val finished = findViewByTagRecursively(decor, "FinishedStrokesView") as? FinishedStrokesView
@@ -765,7 +775,6 @@ class InkPlaygroundVerificationTest {
         }
 
         fun prepareActivityAndGetViews(): Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView> {
-            var result: Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView>? = null
             activityRule.scenario.onActivity { activity ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                     activity.setShowWhenLocked(true)
@@ -778,6 +787,13 @@ class InkPlaygroundVerificationTest {
                         WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                         WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
                 )
+                activity.navigateToDestination?.invoke(AppDestination.CANVAS)
+            }
+            instrumentation.waitForIdleSync()
+            Thread.sleep(350)
+
+            var result: Triple<JetpackInkEngine, InProgressStrokesView, FinishedStrokesView>? = null
+            activityRule.scenario.onActivity { activity ->
                 val decor = activity.window.decorView
                 val inProgress = findViewByTagRecursively(decor, "InProgressStrokesView") as? InProgressStrokesView
                 val finished = findViewByTagRecursively(decor, "FinishedStrokesView") as? FinishedStrokesView
@@ -1656,6 +1672,65 @@ class InkPlaygroundVerificationTest {
         assertTrue(pdfFile.exists() && pdfFile.length() > 100L)
         pngFile.delete()
         pdfFile.delete()
+    }
+
+    @Test
+    fun verifyPhase6Internationalization_PtEnEsSwitching_and_WhiteInkBrush() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        lateinit var vm: com.example.lenote.ui.InkPlaygroundViewModel
+        lateinit var inkEngine: JetpackInkEngine
+        lateinit var strokeView: InProgressStrokesView
+        lateinit var finishedView: FinishedStrokesView
+
+        activityRule.scenario.onActivity { activity ->
+            vm = activity.playgroundViewModel
+            inkEngine = vm.engine
+            activity.navigateToDestination?.invoke(AppDestination.CANVAS)
+        }
+        instrumentation.waitForIdleSync()
+        Thread.sleep(350)
+
+        fun findViewByTagRecursively(root: android.view.View, targetTag: Any): android.view.View? {
+            if (root.tag == targetTag) return root
+            if (root is android.view.ViewGroup) {
+                for (i in 0 until root.childCount) {
+                    val found = findViewByTagRecursively(root.getChildAt(i), targetTag)
+                    if (found != null) return found
+                }
+            }
+            return null
+        }
+
+        activityRule.scenario.onActivity { activity ->
+            val decor = activity.window.decorView
+            strokeView = checkNotNull(findViewByTagRecursively(decor, "InProgressStrokesView") as? InProgressStrokesView)
+            finishedView = checkNotNull(findViewByTagRecursively(decor, "FinishedStrokesView") as? FinishedStrokesView)
+        }
+
+        // 1. Verifica troca de idioma (PT, EN, ES, SYSTEM) no ViewModel e persistência
+        for (lang in listOf(
+            com.example.lenote.data.AppLanguage.PT,
+            com.example.lenote.data.AppLanguage.EN,
+            com.example.lenote.data.AppLanguage.ES,
+            com.example.lenote.data.AppLanguage.SYSTEM
+        )) {
+            instrumentation.runOnMainSync {
+                vm.setAppLanguage(lang)
+            }
+            instrumentation.waitForIdleSync()
+            assertEquals("Idioma deve ser atualizado para $lang", lang, vm.appLanguage.value)
+        }
+
+        // 2. Verifica Tinta Branca (#FFFFFF) no Canvas
+        val whiteColor = 0xFFFFFFFF.toInt()
+        instrumentation.runOnMainSync {
+            inkEngine.clear()
+            inkEngine.setTool(InkingTool.Pen(colorInt = whiteColor, size = 8f))
+        }
+        drawSyntheticStylusStroke(inkEngine, strokeView, 180f, 260f, 480f, 260f)
+        assertEquals(1, inkEngine.state.value.strokeCount)
+        assertEquals(whiteColor, inkEngine.getFinishedStrokesSnapshot().first().brush.colorIntArgb)
+        assertEquals(1, finishedView.getRenderedStrokeCount())
     }
 }
 
