@@ -1,0 +1,5 @@
+• Updated applicationId to io.github.lirielc.lenote for F-Droid & IzzyOnDroid compatibility.
+• Disabled encrypted dependency metadata block (dependenciesInfo) for reproducible open-source builds.
+• Added full internationalization (PT, EN, ES) with automatic Android system locale detection and manual selector.
+• Added White Ink (#FFFFFF) to the pen and lasso palettes with adaptive UI contrast border.
+•Redesigned UI with the custom "Warm Paper & Editorial Ink" Design System.

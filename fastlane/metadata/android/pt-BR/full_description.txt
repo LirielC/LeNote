@@ -1,0 +1,10 @@
+LeNote é um caderno digital editorial focado em escrita à mão para tablets e celulares Android, construído com o Design System autoral "Warm Paper & Editorial Ink" e o motor de baixa latência Jetpack Ink (androidx.ink).
+
+Destaques:
+• Escrita de Baixa Latência com Stylus: Caneta sensível à pressão com 7 tintas editoriais (incluindo Tinta Branca para folhas escuras/OLED), marca-texto e suporte ao botão físico da caneta.
+• Borracha Vetorial Parcial: Corta e apaga apenas o segmento exato atingido pela borracha em tempo real, preservando a geometria vetorial.
+• Seleção por Laço e Refinamento Caligráfico: Selecione traços livremente para mover, recolorir, duplicar, embelezar a caligrafia ou alinhar automaticamente à pauta do papel.
+• 9 Modelos de Pauta e 4 Tons de Papel: Folha Branca, Pautada, Quadriculada, Pontilhada, Matemática, Método Cornell, Planner, Engenharia e Partitura em papel Branco, Amarelo, Sépia Suave e Grafite OLED.
+• Organização Completa: Estrutura em Cadernos, Seções e Folhas, com acesso rápido às folhas recentes, Favoritas e Lixeira.
+• Local-First e Portátil: Importação e anotação de PDFs, exportação vetorial em PDF, exportação de imagem PNG em alta resolução e pacotes de backup .lenote.
+• Internacionalização Nativa: Detecção automática do idioma do Android e seletor manual para Português, Inglês e Espanhol.
