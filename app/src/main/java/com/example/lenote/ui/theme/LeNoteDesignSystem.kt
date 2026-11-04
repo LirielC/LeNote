@@ -361,18 +361,27 @@ object LeNoteTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalLeNoteColors.current
+
+    val strings: com.example.lenote.ui.i18n.LeNoteStrings
+        @Composable
+        @ReadOnlyComposable
+        get() = com.example.lenote.ui.i18n.LocalLeNoteStrings.current
 }
 
 @Composable
 fun LeNoteTheme(
     darkTheme: Boolean = false,
+    appLanguage: com.example.lenote.data.AppLanguage = com.example.lenote.data.AppLanguage.SYSTEM,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) LeNoteDarkColorScheme else LeNoteLightColorScheme
     val extendedColors = if (darkTheme) DarkExtendedColors else LightExtendedColors
+    val resolvedLang = com.example.lenote.ui.i18n.resolveAppLanguage(appLanguage)
+    val strings = com.example.lenote.ui.i18n.stringsForLanguage(resolvedLang)
 
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalLeNoteColors provides extendedColors
+        LocalLeNoteColors provides extendedColors,
+        com.example.lenote.ui.i18n.LocalLeNoteStrings provides strings
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             var currentScreen by remember { mutableStateOf(AppDestination.HOME) }
             val themeMode by playgroundViewModel.themeMode.collectAsState()
+            val appLanguage by playgroundViewModel.appLanguage.collectAsState()
             val isDarkMode = themeMode == ThemeMode.DARK
 
             // Tratamento do botão Voltar do sistema Android quando estiver no canvas
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
                 currentScreen = AppDestination.HOME
             }
 
-            LeNoteTheme(darkTheme = isDarkMode) {
+            LeNoteTheme(darkTheme = isDarkMode, appLanguage = appLanguage) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

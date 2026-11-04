@@ -69,6 +69,7 @@ fun PageTemplatePickerDialog(
     onConfirm: (title: String, background: PageBackground, paperColor: Long) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val s = LeNoteTheme.strings
     var title by remember { mutableStateOf(initialTitle) }
     var selectedBackground by remember { mutableStateOf(initialBackground) }
     var selectedPaperColor by remember { mutableLongStateOf(initialPaperColor) }
@@ -97,12 +98,12 @@ fun PageTemplatePickerDialog(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = if (isCreateMode) "NOVA FOLHA DE CADERNO" else "ATRIBUTOS DO PAPEL",
+                            text = if (isCreateMode) s.templateNewSheetOverline else s.templateAttributesOverline,
                             style = MaterialTheme.typography.labelMedium,
                             color = LeNoteTheme.colors.inkMuted
                         )
                         Text(
-                            text = if (isCreateMode) "Escolher Pauta & Papel" else "Modelo & Cor da Folha",
+                            text = if (isCreateMode) s.templateNewSheetTitle else s.templateAttributesTitle,
                             style = MaterialTheme.typography.headlineSmall,
                             color = LeNoteTheme.colors.inkPrimary
                         )
@@ -111,7 +112,7 @@ fun PageTemplatePickerDialog(
                     IconButton(onClick = onDismiss, modifier = Modifier.size(30.dp)) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.X,
-                            contentDescription = "Fechar",
+                            contentDescription = s.actionClose,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -123,8 +124,8 @@ fun PageTemplatePickerDialog(
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Título da Folha") },
-                        placeholder = { Text("Ex: Notas de Leitura, Esboço...") },
+                        label = { Text(s.templateSheetTitleLabel) },
+                        placeholder = { Text(s.templateSheetTitlePlaceholder) },
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -140,7 +141,7 @@ fun PageTemplatePickerDialog(
                 // Seção 1: Tonalidade do Papel
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "GRAMATURA & TONALIDADE DO PAPEL",
+                        text = s.templatePaperStockHeader,
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkSecondary
                     )
@@ -177,14 +178,14 @@ fun PageTemplatePickerDialog(
                                     if (isSelected) {
                                         Icon(
                                             imageVector = PhosphorIcons.Regular.Check,
-                                            contentDescription = "Selecionado",
+                                            contentDescription = null,
                                             tint = if (PaperColors.isDarkPaper(option.colorLong)) Color.White else LeNoteTheme.colors.accentPrimary,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                                 Text(
-                                    text = option.name,
+                                    text = s.paperColorLabel(option.colorLong),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkSecondary
@@ -199,7 +200,7 @@ fun PageTemplatePickerDialog(
                 // Seção 2: Grade de 9 Modelos Pedagógicos e Técnicos
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "PAUTA & GEOMETRIA DA FOLHA",
+                        text = s.templateRulingHeader,
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkSecondary
                     )
@@ -231,7 +232,7 @@ fun PageTemplatePickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss) {
-                        Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                        Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
@@ -244,7 +245,7 @@ fun PageTemplatePickerDialog(
                             contentColor = Color.White
                         )
                     ) {
-                        Text(if (isCreateMode) "Criar Folha" else "Aplicar à Folha")
+                        Text(if (isCreateMode) s.actionCreateSheet else s.actionApplyToSheet)
                     }
                 }
             }
@@ -262,6 +263,7 @@ private fun TemplateCardItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val s = LeNoteTheme.strings
     val bgColor = Color(paperColor.toInt())
     val isDark = PaperColors.isDarkPaper(paperColor)
 
@@ -294,7 +296,7 @@ private fun TemplateCardItem(
             }
 
             Text(
-                text = background.label,
+                text = s.pageBackgroundLabel(background),
                 style = MaterialTheme.typography.labelLarge.copy(fontSize = 10.5.sp),
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 textAlign = TextAlign.Center,

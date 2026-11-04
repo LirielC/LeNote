@@ -16,8 +16,15 @@ enum class ThemeMode {
     DARK
 }
 
+enum class AppLanguage(val code: String) {
+    SYSTEM("system"),
+    PT("pt"),
+    EN("en"),
+    ES("es")
+}
+
 /**
- * Gerenciador de preferências do usuário (Toolbar, Tema, Visualização de Páginas).
+ * Gerenciador de preferências do usuário (Toolbar, Tema, Idioma, Visualização de Páginas).
  * Utiliza SharedPreferences para persistência rápida e síncrona sem overhead.
  */
 class AppPreferences(context: Context) {
@@ -45,6 +52,16 @@ class AppPreferences(context: Context) {
             prefs.edit().putString(KEY_THEME_MODE, value.name).apply()
         }
 
+    var appLanguage: AppLanguage
+        get() {
+            val name = prefs.getString(KEY_APP_LANGUAGE, AppLanguage.SYSTEM.name)
+            return runCatching { AppLanguage.valueOf(name ?: AppLanguage.SYSTEM.name) }
+                .getOrDefault(AppLanguage.SYSTEM)
+        }
+        set(value) {
+            prefs.edit().putString(KEY_APP_LANGUAGE, value.name).apply()
+        }
+
     var isTouchInkingEnabled: Boolean
         get() = prefs.getBoolean(KEY_TOUCH_INKING_ENABLED, false)
         set(value) {
@@ -61,6 +78,7 @@ class AppPreferences(context: Context) {
         private const val PREFS_NAME = "lenote_user_preferences"
         private const val KEY_TOOLBAR_DOCK_EDGE = "toolbar_dock_edge"
         private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_TOUCH_INKING_ENABLED = "touch_inking_enabled"
         private const val KEY_SIDEBAR_GRID_VIEW = "sidebar_grid_view"
     }

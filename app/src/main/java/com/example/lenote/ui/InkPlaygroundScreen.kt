@@ -143,6 +143,7 @@ fun InkPlaygroundScreen(
     val vmIsSidebarOpen = viewModel?.isSidebarOpen?.collectAsState()
     val vmIsDiagnosticsVisible = viewModel?.isDiagnosticsVisible?.collectAsState()
     val themeMode by (viewModel?.themeMode ?: kotlinx.coroutines.flow.MutableStateFlow(com.example.lenote.data.ThemeMode.LIGHT)).collectAsState()
+    val appLanguage by (viewModel?.appLanguage ?: kotlinx.coroutines.flow.MutableStateFlow(com.example.lenote.data.AppLanguage.SYSTEM)).collectAsState()
     val isDarkMode = themeMode == com.example.lenote.data.ThemeMode.DARK
     val textBlocks by (viewModel?.textBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
     val imageBlocks by (viewModel?.imageBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
@@ -201,7 +202,8 @@ fun InkPlaygroundScreen(
         }
     }
 
-    LeNoteTheme(darkTheme = isDarkMode) {
+    LeNoteTheme(darkTheme = isDarkMode, appLanguage = appLanguage) {
+        val s = LeNoteTheme.strings
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = LeNoteTheme.colors.paperBackground
@@ -242,7 +244,7 @@ fun InkPlaygroundScreen(
                     },
                     onToggleSidebar = { viewModel?.toggleSidebar() },
                     onRenamePageClick = {
-                        renamePageInput = currentPage?.title ?: "Página 1"
+                        renamePageInput = currentPage?.title ?: s.defaultPageTitle(1)
                         showRenamePageDialog = true
                     },
                     onToggleFavorite = { viewModel?.toggleCurrentPageFavorite() },
@@ -268,7 +270,7 @@ fun InkPlaygroundScreen(
                         } else {
                             val bytes = engine.saveStrokes()
                             localSavedStrokesData = bytes
-                            localSaveStatusMessage = "Salvo: ${bytes.size} bytes ($strokeCount traços)"
+                            localSaveStatusMessage = "${s.statusSaved}: ${bytes.size} bytes ($strokeCount)"
                         }
                     },
                     onLoad = {
@@ -277,9 +279,7 @@ fun InkPlaygroundScreen(
                         } else {
                             savedStrokesData?.let { bytes ->
                                 engine.loadStrokes(bytes)
-                                localSaveStatusMessage = "Carregado com sucesso!"
-                            } ?: run {
-                                localSaveStatusMessage = "Nenhum traço salvo em memória!"
+                                localSaveStatusMessage = s.statusSaved
                             }
                         }
                     },
@@ -361,18 +361,18 @@ fun InkPlaygroundScreen(
                                         exportConfirmation = null
                                     }
                                     .onFailure { ex ->
-                                        val appType = if (confState.exportResult.mimeType == "application/pdf") "PDF" else "imagem"
+                                        val isPdf = confState.exportResult.mimeType == "application/pdf"
+                                        val appType = if (isPdf) "PDF" else "PNG"
                                         if (ex is ActivityNotFoundException) {
                                             exportConfirmation = confState.copy(
-                                                title = "Não foi encontrado um aplicativo para abrir $appType.",
+                                                title = s.exportNoAppFoundError(appType),
                                                 subtitle = confState.exportResult.displayPath,
                                                 isError = true,
                                                 canOpen = false
                                             )
                                         } else {
-                                            val docType = if (confState.exportResult.mimeType == "application/pdf") "PDF" else "Imagem"
                                             exportConfirmation = confState.copy(
-                                                title = "$docType salvo com sucesso, mas não foi possível abrir o arquivo.",
+                                                title = s.exportOpenFailedError(appType),
                                                 subtitle = confState.exportResult.displayPath,
                                                 isError = true,
                                                 canOpen = false
@@ -399,343 +399,343 @@ fun InkPlaygroundScreen(
                 )
             }
         }
-    }
 
-    // Diálogo de Renomear Página
-    if (showRenamePageDialog) {
-        AlertDialog(
-            onDismissRequest = { showRenamePageDialog = false },
-            containerColor = LeNoteTheme.colors.elevatedSurface,
-            title = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "FOLHA ATUAL",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = LeNoteTheme.colors.inkMuted
+        // Diálogo de Renomear Página
+        if (showRenamePageDialog) {
+            AlertDialog(
+                onDismissRequest = { showRenamePageDialog = false },
+                containerColor = LeNoteTheme.colors.elevatedSurface,
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = s.currentSheetOverline,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LeNoteTheme.colors.inkMuted
+                        )
+                        Text(
+                            text = s.renamePageTitle,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = LeNoteTheme.colors.inkPrimary
+                        )
+                    }
+                },
+                text = {
+                    OutlinedTextField(
+                        value = renamePageInput,
+                        onValueChange = { renamePageInput = it },
+                        singleLine = true,
+                        placeholder = { Text(s.pageTitlePlaceholder) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LeNoteTheme.colors.accentPrimary,
+                            unfocusedBorderColor = LeNoteTheme.colors.hairlineBorder
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (viewModel != null) {
+                                viewModel.renameCurrentPage(renamePageInput)
+                            }
+                            showRenamePageDialog = false
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = LeNoteTheme.colors.accentPrimary,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(s.actionSave)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRenamePageDialog = false }) {
+                        Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
+                    }
+                }
+            )
+        }
+
+        // Confirmação para Ação Destrutiva "Limpar Página"
+        if (showClearConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirmDialog = false },
+                containerColor = LeNoteTheme.colors.elevatedSurface,
+                icon = {
+                    Icon(
+                        imageVector = PhosphorIcons.Regular.Eraser,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(26.dp)
+                    )
+                },
+                title = {
                     Text(
-                        text = "Renomear Página",
+                        text = s.clearStrokesDialogTitle,
                         style = MaterialTheme.typography.titleLarge,
                         color = LeNoteTheme.colors.inkPrimary
                     )
+                },
+                text = {
+                    Text(
+                        text = s.clearStrokesDialogMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LeNoteTheme.colors.inkSecondary
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            engine.clear()
+                            showClearConfirmDialog = false
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    ) {
+                        Text(s.actionClearSheet)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearConfirmDialog = false }) {
+                        Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
+                    }
                 }
-            },
-            text = {
-                OutlinedTextField(
-                    value = renamePageInput,
-                    onValueChange = { renamePageInput = it },
-                    singleLine = true,
-                    placeholder = { Text("Título da página") },
-                    shape = RoundedCornerShape(10.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = LeNoteTheme.colors.accentPrimary,
-                        unfocusedBorderColor = LeNoteTheme.colors.hairlineBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (viewModel != null) {
-                            viewModel.renameCurrentPage(renamePageInput)
+            )
+        }
+
+        // Confirmação para Ação Destrutiva "Excluir Página"
+        if (showDeletePageConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeletePageConfirmDialog = false },
+                containerColor = LeNoteTheme.colors.elevatedSurface,
+                icon = {
+                    Icon(
+                        imageVector = PhosphorIcons.Regular.Trash,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(26.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        text = s.movePageToTrashDialogTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = LeNoteTheme.colors.inkPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = s.movePageToTrashDialogMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LeNoteTheme.colors.inkSecondary
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            currentPage?.let { page ->
+                                viewModel?.deletePage(page.id) ?: engine.clear()
+                            }
+                            showDeletePageConfirmDialog = false
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        )
+                    ) {
+                        Text(s.menuMoveToTrash)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeletePageConfirmDialog = false }) {
+                        Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
+                    }
+                }
+            )
+        }
+
+        // 1. Diálogo dedicado: Opções da Folha (Tipo de papel e Suavização)
+        if (showSheetOptionsModal) {
+            val currentState by engine.state.collectAsState()
+            SheetOptionsDialog(
+                state = currentState,
+                onPageBackgroundSelect = { engine.setPageBackground(it) },
+                onSmoothingSelect = { engine.setSmoothingLevel(it) },
+                onDismiss = { showSheetOptionsModal = false }
+            )
+        }
+
+        // 2. Diálogo dedicado: Ações da Página (Menu "⋮" do Header)
+        if (showPageActionsModal) {
+            PageActionsDialog(
+                currentPage = currentPage,
+                canMoveUp = canMoveUp,
+                canMoveDown = canMoveDown,
+                onRenamePage = {
+                    renamePageInput = currentPage?.title ?: s.defaultPageTitle(1)
+                    showRenamePageDialog = true
+                    showPageActionsModal = false
+                },
+                onDuplicatePage = {
+                    viewModel?.duplicateCurrentPage()
+                    showPageActionsModal = false
+                },
+                onMoveUp = {
+                    currentPage?.let { page ->
+                        viewModel?.movePageOrder(page.id, moveUp = true)
+                    }
+                },
+                onMoveDown = {
+                    currentPage?.let { page ->
+                        viewModel?.movePageOrder(page.id, moveUp = false)
+                    }
+                },
+                onToggleFavorite = {
+                    viewModel?.toggleCurrentPageFavorite()
+                },
+                onOpenSheetOptions = {
+                    showPageActionsModal = false
+                    showTemplatePickerDialog = true
+                },
+                onExportPdf = {
+                    showPageActionsModal = false
+                    if (viewModel != null) {
+                        viewModel.exportCurrentPageToPdf { res ->
+                            exportConfirmation = if (res.isSuccess) {
+                                ExportConfirmationState(
+                                    exportResult = res,
+                                    title = s.exportPdfSuccessTitle,
+                                    subtitle = res.displayPath,
+                                    isError = false,
+                                    canOpen = true
+                                )
+                            } else {
+                                ExportConfirmationState(
+                                    exportResult = res,
+                                    title = s.exportPdfErrorTitle,
+                                    subtitle = res.errorMessage ?: "",
+                                    isError = true,
+                                    canOpen = false
+                                )
+                            }
                         }
-                        showRenamePageDialog = false
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = LeNoteTheme.colors.accentPrimary,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text("Salvar")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenamePageDialog = false }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
-                }
-            }
-        )
-    }
-
-    // Confirmação para Ação Destrutiva "Limpar Página"
-    if (showClearConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirmDialog = false },
-            containerColor = LeNoteTheme.colors.elevatedSurface,
-            icon = {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Eraser,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(26.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "Limpar todos os traços?",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = LeNoteTheme.colors.inkPrimary
-                )
-            },
-            text = {
-                Text(
-                    text = "Todos os traços manuscritos desta folha serão apagados. Você pode reverter imediatamente usando o botão Desfazer.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LeNoteTheme.colors.inkSecondary
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        engine.clear()
-                        showClearConfirmDialog = false
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) {
-                    Text("Limpar Folha")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirmDialog = false }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
-                }
-            }
-        )
-    }
-
-    // Confirmação para Ação Destrutiva "Excluir Página"
-    if (showDeletePageConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeletePageConfirmDialog = false },
-            containerColor = LeNoteTheme.colors.elevatedSurface,
-            icon = {
-                Icon(
-                    imageVector = PhosphorIcons.Regular.Trash,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(26.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "Mover página para a lixeira?",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = LeNoteTheme.colors.inkPrimary
-                )
-            },
-            text = {
-                Text(
-                    text = "Esta página será movida para a lixeira da biblioteca e poderá ser restaurada caso necessário.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LeNoteTheme.colors.inkSecondary
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        currentPage?.let { page ->
-                            viewModel?.deletePage(page.id) ?: engine.clear()
-                        }
-                        showDeletePageConfirmDialog = false
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError
-                    )
-                ) {
-                    Text("Mover para Lixeira")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeletePageConfirmDialog = false }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
-                }
-            }
-        )
-    }
-
-    // 1. Diálogo dedicado: Opções da Folha (Tipo de papel e Suavização)
-    if (showSheetOptionsModal) {
-        val currentState by engine.state.collectAsState()
-        SheetOptionsDialog(
-            state = currentState,
-            onPageBackgroundSelect = { engine.setPageBackground(it) },
-            onSmoothingSelect = { engine.setSmoothingLevel(it) },
-            onDismiss = { showSheetOptionsModal = false }
-        )
-    }
-
-    // 2. Diálogo dedicado: Ações da Página (Menu "⋮" do Header)
-    if (showPageActionsModal) {
-        PageActionsDialog(
-            currentPage = currentPage,
-            canMoveUp = canMoveUp,
-            canMoveDown = canMoveDown,
-            onRenamePage = {
-                renamePageInput = currentPage?.title ?: "Página 1"
-                showRenamePageDialog = true
-                showPageActionsModal = false
-            },
-            onDuplicatePage = {
-                viewModel?.duplicateCurrentPage()
-                showPageActionsModal = false
-            },
-            onMoveUp = {
-                currentPage?.let { page ->
-                    viewModel?.movePageOrder(page.id, moveUp = true)
-                }
-            },
-            onMoveDown = {
-                currentPage?.let { page ->
-                    viewModel?.movePageOrder(page.id, moveUp = false)
-                }
-            },
-            onToggleFavorite = {
-                viewModel?.toggleCurrentPageFavorite()
-            },
-            onOpenSheetOptions = {
-                showPageActionsModal = false
-                showTemplatePickerDialog = true
-            },
-            onExportPdf = {
-                showPageActionsModal = false
-                if (viewModel != null) {
-                    viewModel.exportCurrentPageToPdf { res ->
-                        exportConfirmation = if (res.isSuccess) {
-                            ExportConfirmationState(
+                    } else {
+                        val pageTitle = currentPage?.title ?: s.defaultPageTitle(1)
+                        val bg = engine.state.value.pageBackground
+                        val strokes = engine.getFinishedStrokesSnapshot()
+                        try {
+                            val res = PageExporter.exportPageToPdf(context, pageTitle, bg, strokes)
+                            exportConfirmation = ExportConfirmationState(
                                 exportResult = res,
-                                title = "PDF exportado com sucesso",
+                                title = s.exportPdfSuccessTitle,
                                 subtitle = res.displayPath,
                                 isError = false,
                                 canOpen = true
                             )
-                        } else {
-                            ExportConfirmationState(
-                                exportResult = res,
-                                title = "Não foi possível exportar o PDF.",
-                                subtitle = res.errorMessage ?: "Erro ao gravar o arquivo.",
+                        } catch (e: Exception) {
+                            val dummy = File(context.cacheDir, "err.pdf")
+                            exportConfirmation = ExportConfirmationState(
+                                exportResult = ExportResult(dummy, null, "", isSuccess = false),
+                                title = s.exportPdfErrorTitle,
+                                subtitle = e.message ?: "",
                                 isError = true,
                                 canOpen = false
                             )
                         }
                     }
-                } else {
-                    val pageTitle = currentPage?.title ?: "Pagina 1"
-                    val bg = engine.state.value.pageBackground
-                    val strokes = engine.getFinishedStrokesSnapshot()
-                    try {
-                        val res = PageExporter.exportPageToPdf(context, pageTitle, bg, strokes)
-                        exportConfirmation = ExportConfirmationState(
-                            exportResult = res,
-                            title = "PDF exportado com sucesso",
-                            subtitle = res.displayPath,
-                            isError = false,
-                            canOpen = true
-                        )
-                    } catch (e: Exception) {
-                        val dummy = File(context.cacheDir, "err.pdf")
-                        exportConfirmation = ExportConfirmationState(
-                            exportResult = ExportResult(dummy, null, "", isSuccess = false),
-                            title = "Não foi possível exportar o PDF.",
-                            subtitle = e.message ?: "Erro ao gravar o arquivo.",
-                            isError = true,
-                            canOpen = false
-                        )
-                    }
-                }
-            },
-            onExportPng = {
-                showPageActionsModal = false
-                if (viewModel != null) {
-                    viewModel.exportCurrentPageToPng { res ->
-                        exportConfirmation = if (res.isSuccess) {
-                            ExportConfirmationState(
+                },
+                onExportPng = {
+                    showPageActionsModal = false
+                    if (viewModel != null) {
+                        viewModel.exportCurrentPageToPng { res ->
+                            exportConfirmation = if (res.isSuccess) {
+                                ExportConfirmationState(
+                                    exportResult = res,
+                                    title = s.exportPngSuccessTitle,
+                                    subtitle = res.displayPath,
+                                    isError = false,
+                                    canOpen = true
+                                )
+                            } else {
+                                ExportConfirmationState(
+                                    exportResult = res,
+                                    title = s.exportPngErrorTitle,
+                                    subtitle = res.errorMessage ?: "",
+                                    isError = true,
+                                    canOpen = false
+                                )
+                            }
+                        }
+                    } else {
+                        val pageTitle = currentPage?.title ?: s.defaultPageTitle(1)
+                        val bg = engine.state.value.pageBackground
+                        val strokes = engine.getFinishedStrokesSnapshot()
+                        try {
+                            val res = PageExporter.exportPageToPng(context, pageTitle, bg, strokes)
+                            exportConfirmation = ExportConfirmationState(
                                 exportResult = res,
-                                title = "Imagem exportada com sucesso",
+                                title = s.exportPngSuccessTitle,
                                 subtitle = res.displayPath,
                                 isError = false,
                                 canOpen = true
                             )
-                        } else {
-                            ExportConfirmationState(
-                                exportResult = res,
-                                title = "Não foi possível exportar a imagem.",
-                                subtitle = res.errorMessage ?: "Erro ao gravar o arquivo.",
+                        } catch (e: Exception) {
+                            val dummy = File(context.cacheDir, "err.png")
+                            exportConfirmation = ExportConfirmationState(
+                                exportResult = ExportResult(dummy, null, "", isSuccess = false),
+                                title = s.exportPngErrorTitle,
+                                subtitle = e.message ?: "",
                                 isError = true,
                                 canOpen = false
                             )
                         }
                     }
-                } else {
-                    val pageTitle = currentPage?.title ?: "Pagina 1"
-                    val bg = engine.state.value.pageBackground
-                    val strokes = engine.getFinishedStrokesSnapshot()
-                    try {
-                        val res = PageExporter.exportPageToPng(context, pageTitle, bg, strokes)
-                        exportConfirmation = ExportConfirmationState(
-                            exportResult = res,
-                            title = "Imagem exportada com sucesso",
-                            subtitle = res.displayPath,
-                            isError = false,
-                            canOpen = true
-                        )
-                    } catch (e: Exception) {
-                        val dummy = File(context.cacheDir, "err.png")
-                        exportConfirmation = ExportConfirmationState(
-                            exportResult = ExportResult(dummy, null, "", isSuccess = false),
-                            title = "Não foi possível exportar a imagem.",
-                            subtitle = e.message ?: "Erro ao gravar o arquivo.",
-                            isError = true,
-                            canOpen = false
-                        )
+                },
+                onDeletePage = {
+                    showPageActionsModal = false
+                    showDeletePageConfirmDialog = true
+                },
+                onPromptClear = {
+                    showPageActionsModal = false
+                    showClearConfirmDialog = true
+                },
+                isDiagnosticsVisible = isDiagnosticsVisible,
+                onToggleDiagnostics = {
+                    if (viewModel != null) {
+                        viewModel.toggleDiagnosticsOverlay()
+                    } else {
+                        localDiagnosticsVisible = !localDiagnosticsVisible
                     }
-                }
-            },
-            onDeletePage = {
-                showPageActionsModal = false
-                showDeletePageConfirmDialog = true
-            },
-            onPromptClear = {
-                showPageActionsModal = false
-                showClearConfirmDialog = true
-            },
-            isDiagnosticsVisible = isDiagnosticsVisible,
-            onToggleDiagnostics = {
-                if (viewModel != null) {
-                    viewModel.toggleDiagnosticsOverlay()
-                } else {
-                    localDiagnosticsVisible = !localDiagnosticsVisible
-                }
-            },
-            onDismiss = { showPageActionsModal = false }
-        )
-    }
+                },
+                onDismiss = { showPageActionsModal = false }
+            )
+        }
 
-    // Diálogo de Seleção de Modelo e Cor de Folha (Opções da Folha)
-    if (showTemplatePickerDialog) {
-        val cur = currentPage
-        PageTemplatePickerDialog(
-            initialTitle = cur?.title ?: "Página 1",
-            initialBackground = cur?.pageBackground ?: engineState.pageBackground,
-            initialPaperColor = cur?.paperColor ?: 0xFFFFFFFF,
-            isCreateMode = false,
-            onConfirm = { _, bg, paperColor ->
-                showTemplatePickerDialog = false
-                if (viewModel != null) {
-                    viewModel.changePageTemplate(bg, paperColor)
-                } else {
-                    engine.setPageBackground(bg, paperColor)
-                }
-            },
-            onDismiss = { showTemplatePickerDialog = false }
-        )
+        // Diálogo de Seleção de Modelo e Cor de Folha (Opções da Folha)
+        if (showTemplatePickerDialog) {
+            val cur = currentPage
+            PageTemplatePickerDialog(
+                initialTitle = cur?.title ?: s.defaultPageTitle(1),
+                initialBackground = cur?.pageBackground ?: engineState.pageBackground,
+                initialPaperColor = cur?.paperColor ?: 0xFFFFFFFF,
+                isCreateMode = false,
+                onConfirm = { _, bg, paperColor ->
+                    showTemplatePickerDialog = false
+                    if (viewModel != null) {
+                        viewModel.changePageTemplate(bg, paperColor)
+                    } else {
+                        engine.setPageBackground(bg, paperColor)
+                    }
+                },
+                onDismiss = { showTemplatePickerDialog = false }
+            )
+        }
     }
 }
 
@@ -758,6 +758,7 @@ private fun CompactHeaderBar(
     onOpenMoreOptions: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     Column(modifier = modifier.statusBarsPadding()) {
         Surface(
             modifier = Modifier
@@ -785,7 +786,7 @@ private fun CompactHeaderBar(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.CaretLeft,
-                                contentDescription = "Voltar para Biblioteca",
+                                contentDescription = s.backToLibraryDesc,
                                 tint = LeNoteTheme.colors.inkPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -807,12 +808,12 @@ private fun CompactHeaderBar(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Notebook,
-                                contentDescription = "Sumário do Caderno",
+                                contentDescription = s.notebookIndexDesc,
                                 tint = LeNoteTheme.colors.accentPrimary,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
-                                text = pageIndexLabel ?: "Sumário",
+                                text = pageIndexLabel ?: s.indexDefaultLabel,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 11.sp
@@ -833,7 +834,7 @@ private fun CompactHeaderBar(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = currentPage?.title ?: "Página 1",
+                            text = currentPage?.title ?: s.defaultPageTitle(1),
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontSize = 15.sp,
                                 lineHeight = 19.sp
@@ -844,7 +845,7 @@ private fun CompactHeaderBar(
                         )
                         Icon(
                             imageVector = PhosphorIcons.Regular.PencilSimple,
-                            contentDescription = "Renomear página",
+                            contentDescription = s.renamePageDesc,
                             tint = LeNoteTheme.colors.inkMuted,
                             modifier = Modifier.size(12.dp)
                         )
@@ -857,7 +858,7 @@ private fun CompactHeaderBar(
                         val isFav = currentPage?.isFavorite == true
                         Icon(
                             imageVector = if (isFav) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                            contentDescription = if (isFav) "Remover dos favoritos" else "Favoritar página",
+                            contentDescription = if (isFav) s.unfavoritePageDesc else s.favoritePageDesc,
                             tint = if (isFav) LeNoteTheme.colors.goldStar else LeNoteTheme.colors.inkMuted,
                             modifier = Modifier.size(15.dp)
                         )
@@ -881,7 +882,7 @@ private fun CompactHeaderBar(
                         ) {
                             if (isSaving) {
                                 Text(
-                                    text = "Salvando...",
+                                    text = s.statusSaving,
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                     color = LeNoteTheme.colors.inkSecondary
                                 )
@@ -893,7 +894,7 @@ private fun CompactHeaderBar(
                                     modifier = Modifier.size(11.dp)
                                 )
                                 Text(
-                                    text = "Salvo",
+                                    text = s.statusSaved,
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                     color = LeNoteTheme.colors.inkSecondary
                                 )
@@ -908,7 +909,7 @@ private fun CompactHeaderBar(
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.SlidersHorizontal,
-                            contentDescription = "Modelo e Cor da Folha",
+                            contentDescription = s.sheetTemplateAndColorDesc,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(17.dp)
                         )
@@ -920,7 +921,7 @@ private fun CompactHeaderBar(
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.DotsThreeVertical,
-                            contentDescription = "Mais opções da página",
+                            contentDescription = s.morePageOptionsDesc,
                             tint = LeNoteTheme.colors.inkPrimary,
                             modifier = Modifier.size(18.dp)
                         )
@@ -1239,6 +1240,7 @@ fun ToolbarOverlay(
     onToggleTouchInking: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     val penColors = listOf(
         Color(0xFF141413), // Tinta Obsidiana
         Color(0xFFFFFFFF), // Tinta Branca (Giz / Folha Escura)
@@ -1306,7 +1308,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.Pen,
                     iconFill = PhosphorIcons.Fill.Pen,
-                    contentDescription = "Caneta",
+                    contentDescription = s.toolPen,
                     isSelected = isPenActive,
                     badgeColor = Color(lastPenColorInt),
                     onClick = {
@@ -1327,7 +1329,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.HighlighterCircle,
                     iconFill = PhosphorIcons.Fill.HighlighterCircle,
-                    contentDescription = "Marca-texto",
+                    contentDescription = s.toolHighlighter,
                     isSelected = isHighlighterActive,
                     badgeColor = Color(lastHighlighterColorInt),
                     onClick = {
@@ -1348,7 +1350,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.Eraser,
                     iconFill = PhosphorIcons.Fill.Eraser,
-                    contentDescription = "Borracha",
+                    contentDescription = s.toolEraser,
                     isSelected = isEraserActive,
                     onClick = {
                         if (isEraserActive) {
@@ -1368,7 +1370,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.Lasso,
                     iconFill = PhosphorIcons.Fill.Lasso,
-                    contentDescription = "Laço de Seleção",
+                    contentDescription = s.toolLasso,
                     isSelected = isLassoActive,
                     onClick = {
                         onToolSelect(InkingTool.Lasso)
@@ -1389,7 +1391,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.TextT,
                     iconFill = PhosphorIcons.Regular.TextT,
-                    contentDescription = "Inserir Caixa de Texto",
+                    contentDescription = s.toolTextBox,
                     isSelected = isTextActive,
                     onClick = {
                         activeContextualPanel = ContextualPanelType.NONE
@@ -1401,7 +1403,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.Image,
                     iconFill = PhosphorIcons.Fill.Image,
-                    contentDescription = "Inserir Imagem",
+                    contentDescription = s.toolInsertImage,
                     isSelected = false,
                     onClick = {
                         activeContextualPanel = ContextualPanelType.NONE
@@ -1413,7 +1415,7 @@ fun ToolbarOverlay(
                 ToolbarToolButton(
                     iconRegular = PhosphorIcons.Regular.HandPointing,
                     iconFill = PhosphorIcons.Fill.HandPointing,
-                    contentDescription = "Escrita com o Dedo",
+                    contentDescription = s.toolTouchInking,
                     isSelected = state.isTouchInkingEnabled,
                     onClick = onToggleTouchInking
                 )
@@ -1435,7 +1437,7 @@ fun ToolbarOverlay(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.ArrowCounterClockwise,
-                        contentDescription = "Desfazer",
+                        contentDescription = s.toolUndo,
                         tint = if (state.canUndo) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkMuted.copy(alpha = 0.35f),
                         modifier = Modifier.size(18.dp)
                     )
@@ -1449,7 +1451,7 @@ fun ToolbarOverlay(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.ArrowClockwise,
-                        contentDescription = "Refazer",
+                        contentDescription = s.toolRedo,
                         tint = if (state.canRedo) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkMuted.copy(alpha = 0.35f),
                         modifier = Modifier.size(18.dp)
                     )
@@ -1503,7 +1505,7 @@ fun ToolbarOverlay(
                         PenStrokeSize.entries.forEach { sz ->
                             val isSelected = kotlin.math.abs(currentSize - sz.sizeWorld) < 0.5f
                             StrokeSizeChip(
-                                label = sz.label,
+                                label = s.penStrokeSizeLabel(sz),
                                 strokeWidthPx = sz.sizeWorld * 1.4f,
                                 strokeColor = Color(lastPenColorInt),
                                 isSelected = isSelected,
@@ -1563,7 +1565,7 @@ fun ToolbarOverlay(
                         HighlighterSize.entries.forEach { sz ->
                             val isSelected = kotlin.math.abs(currentSize - sz.sizeWorld) < 0.5f
                             StrokeSizeChip(
-                                label = sz.label,
+                                label = s.highlighterSizeLabel(sz),
                                 strokeWidthPx = sz.sizeWorld * 0.7f,
                                 strokeColor = Color(lastHighlighterColorInt),
                                 isSelected = isSelected,
@@ -1627,7 +1629,7 @@ fun ToolbarOverlay(
                                         )
                                 )
                                 Text(
-                                    text = sizeOption.label,
+                                    text = s.eraserSizeLabel(sizeOption),
                                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 11.sp),
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (isSelected) LeNoteTheme.colors.inkPrimary else LeNoteTheme.colors.inkSecondary
@@ -1660,7 +1662,7 @@ fun ToolbarOverlay(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "${state.selectedStrokeCount} sel.:",
+                            text = s.lassoSelectedCount(state.selectedStrokeCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = LeNoteTheme.colors.accentPrimary
                         )
@@ -1672,7 +1674,7 @@ fun ToolbarOverlay(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Sparkle,
-                                contentDescription = "Embelezar Caligrafia",
+                                contentDescription = s.lassoBeautifyDesc,
                                 tint = LeNoteTheme.colors.accentWarm,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1685,7 +1687,7 @@ fun ToolbarOverlay(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.ListDashes,
-                                contentDescription = "Alinhar à Pauta",
+                                contentDescription = s.lassoAlignBaselineDesc,
                                 tint = LeNoteTheme.colors.accentPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1698,7 +1700,7 @@ fun ToolbarOverlay(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Copy,
-                                contentDescription = "Duplicar",
+                                contentDescription = s.lassoDuplicateDesc,
                                 tint = LeNoteTheme.colors.inkPrimary,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1727,7 +1729,7 @@ fun ToolbarOverlay(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Trash,
-                                contentDescription = "Excluir traços selecionados",
+                                contentDescription = s.lassoDeleteSelectionDesc,
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1740,7 +1742,7 @@ fun ToolbarOverlay(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.X,
-                                contentDescription = "Desmarcar",
+                                contentDescription = s.lassoClearSelectionDesc,
                                 tint = LeNoteTheme.colors.inkSecondary,
                                 modifier = Modifier.size(15.dp)
                             )
@@ -1759,7 +1761,7 @@ fun ToolbarOverlay(
                             modifier = Modifier.size(15.dp)
                         )
                         Text(
-                            text = "Circule os traços para selecionar, mover ou refinar caligrafia",
+                            text = s.lassoHint,
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                             color = LeNoteTheme.colors.inkSecondary
                         )
@@ -1933,6 +1935,7 @@ private fun SheetOptionsDialog(
     onSmoothingSelect: (SmoothingLevel) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val s = LeNoteTheme.strings
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
@@ -1965,7 +1968,7 @@ private fun SheetOptionsDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "Opções da Folha",
+                            text = s.sheetOptionsTitle,
                             style = MaterialTheme.typography.titleLarge,
                             color = LeNoteTheme.colors.inkPrimary
                         )
@@ -1976,7 +1979,7 @@ private fun SheetOptionsDialog(
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.X,
-                            contentDescription = "Fechar",
+                            contentDescription = s.actionClose,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -1987,7 +1990,7 @@ private fun SheetOptionsDialog(
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "SUAVIZAÇÃO DO TRAÇO",
+                        text = s.strokeSmoothingLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkMuted
                     )
@@ -2053,6 +2056,7 @@ private fun PageActionsDialog(
     onToggleDiagnostics: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val s = LeNoteTheme.strings
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
@@ -2076,12 +2080,12 @@ private fun PageActionsDialog(
                 ) {
                     Column {
                         Text(
-                            text = "OPÇÕES DE PÁGINA",
+                            text = s.pageOptionsOverline,
                             style = MaterialTheme.typography.labelMedium,
                             color = LeNoteTheme.colors.inkMuted
                         )
                         Text(
-                            text = currentPage?.title ?: "Folha Atual",
+                            text = currentPage?.title ?: s.currentSheetFallback,
                             style = MaterialTheme.typography.headlineSmall,
                             color = LeNoteTheme.colors.inkPrimary,
                             maxLines = 1,
@@ -2094,7 +2098,7 @@ private fun PageActionsDialog(
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.X,
-                            contentDescription = "Fechar",
+                            contentDescription = s.actionClose,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -2106,38 +2110,38 @@ private fun PageActionsDialog(
 
                 // 1. GERENCIAMENTO DA PÁGINA
                 Text(
-                    text = "ORGANIZAÇÃO",
+                    text = s.sectionOrganization,
                     style = MaterialTheme.typography.labelMedium,
                     color = LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.PencilSimple,
-                    title = "Renomear folha",
+                    title = s.actionRenameSheet,
                     onClick = onRenamePage
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.Copy,
-                    title = "Duplicar folha",
-                    subtitle = "Cria uma cópia idêntica no caderno",
+                    title = s.actionDuplicateSheet,
+                    subtitle = s.actionDuplicateSheetSubtitle,
                     onClick = onDuplicatePage
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.CaretUp,
-                    title = "Mover para cima",
+                    title = s.actionMoveUp,
                     enabled = canMoveUp,
                     onClick = onMoveUp
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.CaretDown,
-                    title = "Mover para baixo",
+                    title = s.actionMoveDown,
                     enabled = canMoveDown,
                     onClick = onMoveDown
                 )
                 PageActionRow(
                     icon = if (currentPage?.isFavorite == true) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
                     iconTint = if (currentPage?.isFavorite == true) LeNoteTheme.colors.goldStar else null,
-                    title = if (currentPage?.isFavorite == true) "Remover dos favoritos" else "Marcar como favorita",
+                    title = if (currentPage?.isFavorite == true) s.actionRemoveFavorite else s.actionAddFavorite,
                     onClick = onToggleFavorite
                 )
 
@@ -2145,15 +2149,15 @@ private fun PageActionsDialog(
 
                 // 2. CONFIGURAÇÕES DA FOLHA
                 Text(
-                    text = "PAPEL & PAUTA",
+                    text = s.sectionPaperAndRuling,
                     style = MaterialTheme.typography.labelMedium,
                     color = LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.SlidersHorizontal,
-                    title = "Modelo e cor do papel",
-                    subtitle = "Cornell, pautado, pontilhado, música e tons de papel",
+                    title = s.actionSheetTemplateTitle,
+                    subtitle = s.actionSheetTemplateSubtitle,
                     onClick = onOpenSheetOptions
                 )
 
@@ -2161,36 +2165,36 @@ private fun PageActionsDialog(
 
                 // 3. EXPORTAÇÃO
                 Text(
-                    text = "EXPORTAR & COMPARTILHAR",
+                    text = s.sectionExportAndShare,
                     style = MaterialTheme.typography.labelMedium,
                     color = LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.FilePdf,
-                    title = "Exportar como PDF",
-                    subtitle = "Documento vetorial pronto para impressão",
+                    title = s.actionExportPdfTitle,
+                    subtitle = s.actionExportPdfSubtitle,
                     onClick = onExportPdf
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.Image,
-                    title = "Exportar como Imagem (PNG)",
-                    subtitle = "Imagem de alta resolução da folha",
+                    title = s.actionExportPngTitle,
+                    subtitle = s.actionExportPngSubtitle,
                     onClick = onExportPng
                 )
 
                 if (com.example.lenote.BuildConfig.DEBUG) {
                     HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
                     Text(
-                        text = "ENGENHARIA",
+                        text = s.sectionEngineering,
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkMuted,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     PageActionRow(
                         icon = PhosphorIcons.Regular.Bug,
-                        title = "Telemetria Jetpack Ink",
-                        subtitle = if (isDiagnosticsVisible) "Visível no canvas" else "Oculto",
+                        title = s.actionTelemetryTitle,
+                        subtitle = if (isDiagnosticsVisible) s.telemetryVisibleSubtitle else s.telemetryHiddenSubtitle,
                         onClick = onToggleDiagnostics
                     )
                 }
@@ -2199,22 +2203,22 @@ private fun PageActionsDialog(
 
                 // 5. AÇÕES DESTRUTIVAS
                 Text(
-                    text = "ZONA DE EXCLUSÃO",
+                    text = s.sectionDangerZone,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp)
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.Eraser,
-                    title = "Limpar todos os traços",
-                    subtitle = "Apaga o conteúdo mantendo a folha",
+                    title = s.actionClearAllStrokesTitle,
+                    subtitle = s.actionClearAllStrokesSubtitle,
                     isDestructive = true,
                     onClick = onPromptClear
                 )
                 PageActionRow(
                     icon = PhosphorIcons.Regular.Trash,
-                    title = "Mover folha para a lixeira",
-                    subtitle = "Remove esta folha do caderno",
+                    title = s.actionMoveSheetToTrashTitle,
+                    subtitle = s.actionMoveSheetToTrashSubtitle,
                     isDestructive = true,
                     onClick = onDeletePage
                 )
@@ -2294,6 +2298,7 @@ private fun ZoomIndicatorControl(
     onFitToPage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     var isExpanded by remember { mutableStateOf(false) }
 
     Surface(
@@ -2338,7 +2343,7 @@ private fun ZoomIndicatorControl(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.Minus,
-                        contentDescription = "Diminuir zoom",
+                        contentDescription = s.zoomOutDesc,
                         tint = LeNoteTheme.colors.inkPrimary,
                         modifier = Modifier.size(14.dp)
                     )
@@ -2370,7 +2375,7 @@ private fun ZoomIndicatorControl(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.Plus,
-                        contentDescription = "Aumentar zoom",
+                        contentDescription = s.zoomInDesc,
                         tint = LeNoteTheme.colors.inkPrimary,
                         modifier = Modifier.size(14.dp)
                     )
@@ -2392,7 +2397,7 @@ private fun ZoomIndicatorControl(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.CornersOut,
-                        contentDescription = "Ajustar à página",
+                        contentDescription = s.zoomFitToPageDesc,
                         tint = LeNoteTheme.colors.inkPrimary,
                         modifier = Modifier.size(15.dp)
                     )
@@ -2404,7 +2409,7 @@ private fun ZoomIndicatorControl(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.X,
-                        contentDescription = "Fechar controle de zoom",
+                        contentDescription = s.zoomCloseDesc,
                         tint = LeNoteTheme.colors.inkMuted,
                         modifier = Modifier.size(12.dp)
                     )
@@ -2424,6 +2429,7 @@ private fun ExportConfirmationBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     Surface(
         modifier = modifier
             .widthIn(min = 320.dp, max = 540.dp)
@@ -2489,7 +2495,7 @@ private fun ExportConfirmationBanner(
             }
 
             if (state.canOpen) {
-                val actionLabel = if (state.exportResult.mimeType == "application/pdf") "Abrir PDF" else "Ver imagem"
+                val actionLabel = if (state.exportResult.mimeType == "application/pdf") s.exportOpenPdfButton else s.exportViewImageButton
                 Button(
                     onClick = onOpen,
                     shape = RoundedCornerShape(8.dp),
@@ -2520,7 +2526,7 @@ private fun ExportConfirmationBanner(
             ) {
                 Icon(
                     imageVector = PhosphorIcons.Regular.X,
-                    contentDescription = "Fechar",
+                    contentDescription = s.actionClose,
                     tint = LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.size(15.dp)
                 )

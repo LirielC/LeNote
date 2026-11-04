@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.RectF
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.lenote.data.AppLanguage
 import com.example.lenote.data.AppPreferences
 import com.example.lenote.data.HandwritingSearchResult
 import com.example.lenote.data.LeNoteDatabase
@@ -138,6 +139,9 @@ class InkPlaygroundViewModel : ViewModel() {
     private val _themeMode = MutableStateFlow(ThemeMode.SYSTEM)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    private val _appLanguage = MutableStateFlow(AppLanguage.SYSTEM)
+    val appLanguage: StateFlow<AppLanguage> = _appLanguage.asStateFlow()
+
     private val _isSidebarGridView = MutableStateFlow(false)
     val isSidebarGridView: StateFlow<Boolean> = _isSidebarGridView.asStateFlow()
 
@@ -162,6 +166,7 @@ class InkPlaygroundViewModel : ViewModel() {
         val touchInking = prefs.isTouchInkingEnabled
         engine.setTouchInkingEnabled(touchInking)
         _themeMode.value = prefs.themeMode
+        _appLanguage.value = prefs.appLanguage
         _isSidebarGridView.value = prefs.isSidebarGridView
 
         val inkMgr = DigitalInkManager(appCtx)
@@ -769,6 +774,11 @@ class InkPlaygroundViewModel : ViewModel() {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         appPreferences?.themeMode = mode
+    }
+
+    fun setAppLanguage(language: AppLanguage) {
+        _appLanguage.value = language
+        appPreferences?.appLanguage = language
     }
 
     fun toggleSidebarGridView() {

@@ -105,6 +105,7 @@ fun CollapsibleNavigationSidebar(
     var pageToDeletePermanently by remember { mutableStateOf<PageEntity?>(null) }
     var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
 
+    val s = LeNoteTheme.strings
     val context = LocalContext.current
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var dialogMode by remember { mutableStateOf<SidebarDialogMode?>(null) }
@@ -179,7 +180,7 @@ fun CollapsibleNavigationSidebar(
                 ) {
                     Column {
                         Text(
-                            text = "ÍNDICE & SUMÁRIO",
+                            text = s.sidebarOverline,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 9.5.sp,
                                 letterSpacing = 1.sp
@@ -187,7 +188,7 @@ fun CollapsibleNavigationSidebar(
                             color = LeNoteTheme.colors.inkMuted
                         )
                         Text(
-                            text = "Cadernos & Folhas",
+                            text = s.sidebarTitle,
                             style = MaterialTheme.typography.titleLarge,
                             color = LeNoteTheme.colors.inkPrimary
                         )
@@ -198,7 +199,7 @@ fun CollapsibleNavigationSidebar(
                     ) {
                         Icon(
                             imageVector = PhosphorIcons.Regular.X,
-                            contentDescription = "Fechar sumário",
+                            contentDescription = s.actionClose,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(17.dp)
                         )
@@ -209,12 +210,12 @@ fun CollapsibleNavigationSidebar(
                 EditorialSearchBar(
                     query = searchQuery,
                     onQueryChange = { viewModel.updateSearchQuery(it) },
-                    placeholder = "Buscar folhas ou texto manuscrito..."
+                    placeholder = s.sidebarSearchPlaceholder
                 )
 
                 if (searchQuery.isNotBlank()) {
                     Text(
-                        text = "RESULTADOS (${searchResults.size})",
+                        text = s.sidebarSearchResultsHeader(searchResults.size),
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkSecondary
                     )
@@ -225,9 +226,9 @@ fun CollapsibleNavigationSidebar(
                         ) {
                             EditorialEmptyState(
                                 icon = PhosphorIcons.Regular.MagnifyingGlass,
-                                overline = "Busca no Caderno",
-                                title = "Nenhuma folha encontrada",
-                                description = "Nenhum título ou texto manuscrito corresponde a \"$searchQuery\"."
+                                overline = s.sidebarSearchEmptyOverline,
+                                title = s.sidebarSearchEmptyTitle,
+                                description = s.sidebarSearchEmptyDesc(searchQuery)
                             )
                         }
                     } else {
@@ -265,7 +266,7 @@ fun CollapsibleNavigationSidebar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "CADERNOS (${notebooks.size})",
+                            text = s.sidebarNotebooksHeader(notebooks.size),
                             style = MaterialTheme.typography.labelMedium,
                             color = LeNoteTheme.colors.inkMuted
                         )
@@ -285,7 +286,7 @@ fun CollapsibleNavigationSidebar(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.PencilSimple,
-                                    contentDescription = "Renomear caderno",
+                                    contentDescription = s.sidebarRenameNotebookTitle,
                                     tint = LeNoteTheme.colors.inkSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
@@ -300,7 +301,7 @@ fun CollapsibleNavigationSidebar(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.Plus,
-                                    contentDescription = "Novo caderno",
+                                    contentDescription = s.fabNewNotebook,
                                     tint = LeNoteTheme.colors.accentPrimary,
                                     modifier = Modifier.size(15.dp)
                                 )
@@ -356,7 +357,7 @@ fun CollapsibleNavigationSidebar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "SEÇÕES (${sections.size})",
+                            text = s.sidebarSectionsHeader(sections.size),
                             style = MaterialTheme.typography.labelMedium,
                             color = LeNoteTheme.colors.inkMuted
                         )
@@ -376,7 +377,7 @@ fun CollapsibleNavigationSidebar(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.PencilSimple,
-                                    contentDescription = "Renomear seção",
+                                    contentDescription = s.sidebarRenameSectionTitle,
                                     tint = LeNoteTheme.colors.inkSecondary,
                                     modifier = Modifier.size(14.dp)
                                 )
@@ -391,7 +392,7 @@ fun CollapsibleNavigationSidebar(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.Plus,
-                                    contentDescription = "Nova seção",
+                                    contentDescription = s.sidebarNewSectionTitle,
                                     tint = LeNoteTheme.colors.accentPrimary,
                                     modifier = Modifier.size(15.dp)
                                 )
@@ -440,7 +441,7 @@ fun CollapsibleNavigationSidebar(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (showFavoritesOnly) "FAVORITAS (${favoritePages.size})" else "FOLHAS (${pages.size})",
+                                text = if (showFavoritesOnly) s.sidebarFavoritesHeader(favoritePages.size) else s.sidebarPagesHeader(pages.size),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = LeNoteTheme.colors.inkMuted
                             )
@@ -457,12 +458,12 @@ fun CollapsibleNavigationSidebar(
                                 ) {
                                     Icon(
                                         imageVector = if (showFavoritesOnly) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                                        contentDescription = "Filtrar favoritas",
+                                        contentDescription = s.sidebarFilterStars,
                                         tint = if (showFavoritesOnly) LeNoteTheme.colors.goldStar else LeNoteTheme.colors.inkSecondary,
                                         modifier = Modifier.size(11.dp)
                                     )
                                     Text(
-                                        text = if (showFavoritesOnly) "Todas" else "Estrelas",
+                                        text = if (showFavoritesOnly) s.sidebarFilterAll else s.sidebarFilterStars,
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                         color = LeNoteTheme.colors.inkSecondary
                                     )
@@ -471,7 +472,7 @@ fun CollapsibleNavigationSidebar(
                         }
 
                         EditorialActionChip(
-                            label = "Nova Folha",
+                            label = s.sidebarNewSheetButton,
                             icon = PhosphorIcons.Regular.Plus,
                             onClick = { showCreatePageTemplateDialog = true },
                             isPrimary = true
@@ -517,13 +518,13 @@ fun CollapsibleNavigationSidebar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     EditorialActionChip(
-                        label = "PDF",
+                        label = s.actionPdf,
                         icon = PhosphorIcons.Regular.FilePdf,
                         onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
                         modifier = Modifier.weight(1f)
                     )
                     EditorialActionChip(
-                        label = "Backup",
+                        label = s.actionBackup,
                         icon = PhosphorIcons.Regular.Export,
                         onClick = {
                             val currentNb = notebooks.find { it.id == selectedNotebookId } ?: notebooks.firstOrNull()
@@ -537,7 +538,7 @@ fun CollapsibleNavigationSidebar(
                     )
                     val trashCount = deletedNotebooks.size + deletedPages.size
                     EditorialActionChip(
-                        label = "Lixeira ($trashCount)",
+                        label = s.sidebarTrashButton(trashCount),
                         icon = PhosphorIcons.Regular.Trash,
                         onClick = { showTrashDialog = true },
                         isDestructive = trashCount > 0,
@@ -577,7 +578,7 @@ fun CollapsibleNavigationSidebar(
                             tint = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "Lixeira do Aplicativo",
+                            text = s.sidebarTrashDialogTitle,
                             style = MaterialTheme.typography.titleLarge,
                             color = LeNoteTheme.colors.inkPrimary
                         )
@@ -587,7 +588,7 @@ fun CollapsibleNavigationSidebar(
                             onClick = { showEmptyTrashConfirmDialog = true },
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text("Esvaziar", fontSize = 12.sp)
+                            Text(s.sidebarEmptyAction, fontSize = 12.sp)
                         }
                     }
                 }
@@ -610,7 +611,7 @@ fun CollapsibleNavigationSidebar(
             },
             confirmButton = {
                 TextButton(onClick = { showTrashDialog = false }) {
-                    Text("Fechar", color = LeNoteTheme.colors.inkPrimary)
+                    Text(s.actionClose, color = LeNoteTheme.colors.inkPrimary)
                 }
             }
         )
@@ -620,8 +621,8 @@ fun CollapsibleNavigationSidebar(
         AlertDialog(
             onDismissRequest = { showEmptyTrashConfirmDialog = false },
             containerColor = LeNoteTheme.colors.elevatedSurface,
-            title = { Text("Esvaziar Lixeira?", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("Todos os cadernos e páginas na lixeira serão excluídos permanentemente.") },
+            title = { Text(s.emptyTrashDialogTitle, style = MaterialTheme.typography.titleLarge) },
+            text = { Text(s.emptyTrashDialogMessage) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -630,12 +631,12 @@ fun CollapsibleNavigationSidebar(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Esvaziar")
+                    Text(s.sidebarEmptyAction)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEmptyTrashConfirmDialog = false }) {
-                    Text("Cancelar")
+                    Text(s.actionCancel)
                 }
             }
         )
@@ -646,8 +647,8 @@ fun CollapsibleNavigationSidebar(
         AlertDialog(
             onDismissRequest = { notebookToDeletePermanently = null },
             containerColor = LeNoteTheme.colors.elevatedSurface,
-            title = { Text("Excluir Caderno?", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("O caderno '${nb.title}' será excluído definitivamente.") },
+            title = { Text(s.deleteNotebookDialogTitle, style = MaterialTheme.typography.titleLarge) },
+            text = { Text(s.deleteNotebookDialogMessage(nb.title)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -656,12 +657,12 @@ fun CollapsibleNavigationSidebar(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Excluir")
+                    Text(s.actionDelete)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { notebookToDeletePermanently = null }) {
-                    Text("Cancelar")
+                    Text(s.actionCancel)
                 }
             }
         )
@@ -672,8 +673,8 @@ fun CollapsibleNavigationSidebar(
         AlertDialog(
             onDismissRequest = { pageToDeletePermanently = null },
             containerColor = LeNoteTheme.colors.elevatedSurface,
-            title = { Text("Excluir Página?", style = MaterialTheme.typography.titleLarge) },
-            text = { Text("A página '${p.title}' será excluída definitivamente.") },
+            title = { Text(s.deletePageDialogTitle, style = MaterialTheme.typography.titleLarge) },
+            text = { Text(s.deletePageDialogMessage(p.title)) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -682,12 +683,12 @@ fun CollapsibleNavigationSidebar(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Excluir")
+                    Text(s.actionDelete)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pageToDeletePermanently = null }) {
-                    Text("Cancelar")
+                    Text(s.actionCancel)
                 }
             }
         )
@@ -696,14 +697,14 @@ fun CollapsibleNavigationSidebar(
     // Diálogo de Seleção de Modelo para Nova Página
     if (showCreatePageTemplateDialog) {
         PageTemplatePickerDialog(
-            initialTitle = "Página ${pages.size + 1}",
+            initialTitle = s.defaultPageTitle(pages.size + 1),
             initialBackground = currentPage?.pageBackground ?: PageBackground.RULED,
             initialPaperColor = currentPage?.paperColor ?: 0xFFFFFFFF,
             isCreateMode = true,
             onConfirm = { newTitle, bg, paperColor ->
                 showCreatePageTemplateDialog = false
                 viewModel.createNewPage(
-                    title = newTitle.ifBlank { "Página ${pages.size + 1}" },
+                    title = newTitle.ifBlank { s.defaultPageTitle(pages.size + 1) },
                     background = bg,
                     paperColor = paperColor
                 )
@@ -731,11 +732,11 @@ fun CollapsibleNavigationSidebar(
     val activeDialog = dialogMode
     if (activeDialog != null) {
         val titleText = when (activeDialog) {
-            is SidebarDialogMode.CreateNotebook -> "Novo Caderno"
-            is SidebarDialogMode.RenameNotebook -> "Renomear Caderno"
-            is SidebarDialogMode.CreateSection -> "Nova Seção"
-            is SidebarDialogMode.RenameSection -> "Renomear Seção"
-            is SidebarDialogMode.RenamePage -> "Renomear Folha"
+            is SidebarDialogMode.CreateNotebook -> s.defaultNewNotebookName
+            is SidebarDialogMode.RenameNotebook -> s.sidebarRenameNotebookTitle
+            is SidebarDialogMode.CreateSection -> s.sidebarNewSectionTitle
+            is SidebarDialogMode.RenameSection -> s.sidebarRenameSectionTitle
+            is SidebarDialogMode.RenamePage -> s.renamePageTitle
         }
 
         AlertDialog(
@@ -753,7 +754,7 @@ fun CollapsibleNavigationSidebar(
                     value = dialogInputText,
                     onValueChange = { dialogInputText = it },
                     singleLine = true,
-                    placeholder = { Text("Digite o nome...") },
+                    placeholder = { Text(s.sidebarEnterNamePlaceholder) },
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = LeNoteTheme.colors.accentPrimary,
@@ -780,7 +781,7 @@ fun CollapsibleNavigationSidebar(
                         contentColor = Color.White
                     )
                 ) {
-                    Text("Confirmar")
+                    Text(s.actionConfirm)
                 }
             },
             dismissButton = {
@@ -792,7 +793,7 @@ fun CollapsibleNavigationSidebar(
                                 dialogMode = null
                             }
                         ) {
-                            Text("Mover para Lixeira", color = MaterialTheme.colorScheme.error)
+                            Text(s.menuMoveToTrash, color = MaterialTheme.colorScheme.error)
                         }
                     } else if (activeDialog is SidebarDialogMode.RenameSection) {
                         TextButton(
@@ -801,11 +802,11 @@ fun CollapsibleNavigationSidebar(
                                 dialogMode = null
                             }
                         ) {
-                            Text("Excluir", color = MaterialTheme.colorScheme.error)
+                            Text(s.actionDelete, color = MaterialTheme.colorScheme.error)
                         }
                     }
                     TextButton(onClick = { dialogMode = null }) {
-                        Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                        Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
                     }
                 }
             }
@@ -841,6 +842,7 @@ private fun PageListItemCard(
     onDelete: () -> Unit,
     showReorderButtons: Boolean
 ) {
+    val s = LeNoteTheme.strings
     var isContextMenuOpen by remember { mutableStateOf(false) }
 
     val thumbBitmap = remember(page.id, page.updatedAt, thumbnailVersion) {
@@ -889,7 +891,7 @@ private fun PageListItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = page.pageBackground.label,
+                    text = s.pageBackgroundLabel(page.pageBackground),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     color = LeNoteTheme.colors.inkMuted
                 )
@@ -902,7 +904,7 @@ private fun PageListItemCard(
             ) {
                 Icon(
                     imageVector = if (page.isFavorite) PhosphorIcons.Fill.Star else PhosphorIcons.Regular.Star,
-                    contentDescription = if (page.isFavorite) "Desfavoritar" else "Favoritar",
+                    contentDescription = if (page.isFavorite) s.unfavoritePageDesc else s.favoritePageDesc,
                     tint = if (page.isFavorite) LeNoteTheme.colors.goldStar else LeNoteTheme.colors.inkMuted,
                     modifier = Modifier.size(15.dp)
                 )
@@ -916,7 +918,7 @@ private fun PageListItemCard(
                 ) {
                     Icon(
                         imageVector = PhosphorIcons.Regular.DotsThreeVertical,
-                        contentDescription = "Mais ações da página",
+                        contentDescription = s.morePageOptionsDesc,
                         tint = LeNoteTheme.colors.inkSecondary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -928,7 +930,7 @@ private fun PageListItemCard(
                     containerColor = LeNoteTheme.colors.elevatedSurface
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Renomear", style = MaterialTheme.typography.bodyMedium) },
+                        text = { Text(s.actionRenameSheet, style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.PencilSimple,
@@ -944,7 +946,7 @@ private fun PageListItemCard(
                     )
 
                     DropdownMenuItem(
-                        text = { Text("Duplicar", style = MaterialTheme.typography.bodyMedium) },
+                        text = { Text(s.actionDuplicateSheet, style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Copy,
@@ -961,7 +963,7 @@ private fun PageListItemCard(
 
                     if (showReorderButtons) {
                         DropdownMenuItem(
-                            text = { Text("Mover para cima", style = MaterialTheme.typography.bodyMedium) },
+                            text = { Text(s.actionMoveUp, style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.CaretUp,
@@ -976,7 +978,7 @@ private fun PageListItemCard(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Mover para baixo", style = MaterialTheme.typography.bodyMedium) },
+                            text = { Text(s.actionMoveDown, style = MaterialTheme.typography.bodyMedium) },
                             leadingIcon = {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.CaretDown,
@@ -995,7 +997,7 @@ private fun PageListItemCard(
                     HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
 
                     DropdownMenuItem(
-                        text = { Text("Modelo e Cor do Papel", style = MaterialTheme.typography.bodyMedium) },
+                        text = { Text(s.actionSheetTemplateTitle, style = MaterialTheme.typography.bodyMedium) },
                         leadingIcon = {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.SlidersHorizontal,
@@ -1013,7 +1015,7 @@ private fun PageListItemCard(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                text = "Mover para Lixeira",
+                                text = s.menuMoveToTrash,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error
                             )

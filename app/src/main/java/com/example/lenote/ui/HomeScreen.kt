@@ -81,9 +81,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.lenote.data.AppLanguage
 import com.example.lenote.data.NotebookEntity
 import com.example.lenote.data.PageEntity
 import com.example.lenote.ink.PageBackground
+import com.example.lenote.ui.i18n.resolveAppLanguage
 import com.example.lenote.ui.theme.EditorialActionChip
 import com.example.lenote.ui.theme.EditorialEmptyState
 import com.example.lenote.ui.theme.EditorialFeedbackBannerState
@@ -132,7 +134,9 @@ fun HomeScreen(
     val deletedPages by viewModel.deletedPages.collectAsState()
     val thumbnailVersion by viewModel.thumbnailVersion.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
     val isDarkMode = themeMode == com.example.lenote.data.ThemeMode.DARK
+    val s = LeNoteTheme.strings
 
     // 0: Biblioteca, 1: Favoritas, 2: Lixeira
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -140,6 +144,7 @@ fun HomeScreen(
     var notebookToDeletePermanently by remember { mutableStateOf<NotebookEntity?>(null) }
     var pageToDeletePermanently by remember { mutableStateOf<PageEntity?>(null) }
     var showEmptyTrashConfirmDialog by remember { mutableStateOf(false) }
+    var showLanguagePickerDialog by remember { mutableStateOf(false) }
 
     // Estado explícito para Loading, Sucesso e Erro (Rule 10)
     var feedbackBanner by remember { mutableStateOf<EditorialFeedbackBannerState?>(null) }
@@ -168,8 +173,8 @@ fun HomeScreen(
 
             feedbackBanner = EditorialFeedbackBannerState(
                 type = EditorialFeedbackType.LOADING,
-                title = "Importando documento PDF...",
-                message = "Renderizando páginas de '$cleanName' para o seu caderno."
+                title = s.bannerImportingPdfTitle,
+                message = s.bannerImportingPdfMessage(cleanName)
             )
 
             try {
@@ -182,16 +187,16 @@ fun HomeScreen(
                 viewModel.importPdfDocument(title, targetFile) { nb ->
                     feedbackBanner = EditorialFeedbackBannerState(
                         type = EditorialFeedbackType.SUCCESS,
-                        title = "PDF importado com sucesso",
-                        message = "Caderno '${nb.title}' pronto para anotação."
+                        title = s.bannerPdfImportedTitle,
+                        message = s.bannerPdfImportedMessage(nb.title)
                     )
                     onOpenNotebook(nb)
                 }
             } catch (e: Exception) {
                 feedbackBanner = EditorialFeedbackBannerState(
                     type = EditorialFeedbackType.ERROR,
-                    title = "Falha ao importar PDF",
-                    message = e.localizedMessage ?: "Verifique se o arquivo PDF é válido."
+                    title = s.bannerPdfImportFailedTitle,
+                    message = e.localizedMessage ?: s.bannerPdfImportFailedDefaultMsg
                 )
             }
         }
@@ -207,8 +212,8 @@ fun HomeScreen(
 
             feedbackBanner = EditorialFeedbackBannerState(
                 type = EditorialFeedbackType.LOADING,
-                title = "Importando pacote .lenote...",
-                message = "Restaurando seções, páginas e traços vetoriais."
+                title = s.bannerImportingLenoteTitle,
+                message = s.bannerImportingLenoteMessage
             )
 
             try {
@@ -222,23 +227,23 @@ fun HomeScreen(
                     if (importedNb != null) {
                         feedbackBanner = EditorialFeedbackBannerState(
                             type = EditorialFeedbackType.SUCCESS,
-                            title = "Caderno importado",
-                            message = "'${importedNb.title}' adicionado à biblioteca."
+                            title = s.bannerLenoteImportedTitle,
+                            message = s.bannerLenoteImportedMessage(importedNb.title)
                         )
                         onOpenNotebook(importedNb)
                     } else {
                         feedbackBanner = EditorialFeedbackBannerState(
                             type = EditorialFeedbackType.ERROR,
-                            title = "Pacote .lenote inválido",
-                            message = "Não foi possível ler a estrutura do arquivo selecionado."
+                            title = s.bannerLenoteInvalidTitle,
+                            message = s.bannerLenoteInvalidMessage
                         )
                     }
                 }
             } catch (e: Exception) {
                 feedbackBanner = EditorialFeedbackBannerState(
                     type = EditorialFeedbackType.ERROR,
-                    title = "Erro na importação",
-                    message = e.localizedMessage ?: "Falha de leitura do pacote."
+                    title = s.bannerImportErrorTitle,
+                    message = e.localizedMessage ?: s.bannerImportErrorDefaultMsg
                 )
             }
         }
@@ -252,8 +257,8 @@ fun HomeScreen(
         if (uri != null && nb != null) {
             feedbackBanner = EditorialFeedbackBannerState(
                 type = EditorialFeedbackType.LOADING,
-                title = "Exportando '${nb.title}'...",
-                message = "Compactando traços, mídias e metadados."
+                title = s.bannerExportingNotebookTitle(nb.title),
+                message = s.bannerExportingNotebookMessage
             )
             val tempZip = File(context.cacheDir, "temp_export_${nb.id}.lenote")
             viewModel.exportNotebookPackage(nb.id, tempZip) { success ->
@@ -266,22 +271,22 @@ fun HomeScreen(
                         }
                         feedbackBanner = EditorialFeedbackBannerState(
                             type = EditorialFeedbackType.SUCCESS,
-                            title = "Backup .lenote concluído",
-                            message = "O caderno '${nb.title}' foi salvo com sucesso."
+                            title = s.bannerExportSuccessTitle,
+                            message = s.bannerExportSuccessMessage(nb.title)
                         )
                     } catch (e: Exception) {
                         feedbackBanner = EditorialFeedbackBannerState(
                             type = EditorialFeedbackType.ERROR,
-                            title = "Erro ao gravar arquivo",
-                            message = e.localizedMessage ?: "Não foi possível salvar no destino."
+                            title = s.bannerExportWriteErrorTitle,
+                            message = e.localizedMessage ?: s.bannerExportFailedMessage
                         )
                     }
                     tempZip.delete()
                 } else {
                     feedbackBanner = EditorialFeedbackBannerState(
                         type = EditorialFeedbackType.ERROR,
-                        title = "Falha na exportação",
-                        message = "Não foi possível gerar o pacote do caderno."
+                        title = s.bannerExportFailedTitle,
+                        message = s.bannerExportFailedMessage
                     )
                 }
             }
@@ -350,11 +355,11 @@ fun HomeScreen(
                         ) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.Plus,
-                                contentDescription = "Novo Caderno",
+                                contentDescription = s.fabNewNotebook,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
-                                text = "Novo Caderno",
+                                text = s.fabNewNotebook,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
@@ -378,11 +383,11 @@ fun HomeScreen(
                             ) {
                                 Icon(
                                     imageVector = PhosphorIcons.Regular.Trash,
-                                    contentDescription = "Esvaziar Lixeira",
+                                    contentDescription = s.fabEmptyTrash,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
-                                    text = "Esvaziar Lixeira",
+                                    text = s.fabEmptyTrash,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White
@@ -412,6 +417,7 @@ fun HomeScreen(
                 onImportLenote = {
                     lenoteImportLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
                 },
+                onOpenLanguagePicker = { showLanguagePickerDialog = true },
                 onToggleTheme = { viewModel.toggleDarkThemeMode() }
             )
 
@@ -434,26 +440,26 @@ fun HomeScreen(
                 EditorialSearchBar(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
-                    placeholder = "Buscar cadernos, notas ou tópicos..."
+                    placeholder = s.searchNotebooksPlaceholder
                 )
 
                 val trashTotal = deletedNotebooks.size + deletedPages.size
                 EditorialSegmentedBar(
                     tabs = listOf(
                         EditorialFilterTab(
-                            label = "Biblioteca",
+                            label = s.tabLibrary,
                             count = notebooks.size,
                             icon = PhosphorIcons.Regular.Notebook,
                             selectedIcon = PhosphorIcons.Fill.Notebook
                         ),
                         EditorialFilterTab(
-                            label = "Favoritas",
+                            label = s.tabFavorites,
                             count = favoritePages.size,
                             icon = PhosphorIcons.Regular.Star,
                             selectedIcon = PhosphorIcons.Fill.Star
                         ),
                         EditorialFilterTab(
-                            label = "Lixeira",
+                            label = s.tabTrash,
                             count = trashTotal,
                             icon = PhosphorIcons.Regular.Trash,
                             selectedIcon = PhosphorIcons.Fill.Trash
@@ -478,20 +484,20 @@ fun HomeScreen(
                             if (searchQuery.isNotBlank()) {
                                 EditorialEmptyState(
                                     icon = PhosphorIcons.Regular.MagnifyingGlass,
-                                    overline = "Sem resultados",
-                                    title = "Nenhum caderno para \"$searchQuery\"",
-                                    description = "Verifique a grafia ou limpe o filtro de busca para visualizar toda a sua coleção.",
-                                    actionLabel = "Limpar Busca",
+                                    overline = s.emptySearchOverline,
+                                    title = s.emptySearchTitle(searchQuery),
+                                    description = s.emptySearchDescription,
+                                    actionLabel = s.actionClearSearch,
                                     actionIcon = PhosphorIcons.Regular.X,
                                     onActionClick = { searchQuery = "" }
                                 )
                             } else {
                                 EditorialEmptyState(
                                     icon = PhosphorIcons.Regular.Notebook,
-                                    overline = "Acervo Vazio",
-                                    title = "Comece seu primeiro caderno",
-                                    description = "Crie um caderno em branco para manuscritos e esboços ou importe um PDF para leitura e anotação.",
-                                    actionLabel = "Criar Primeiro Caderno",
+                                    overline = s.emptyLibraryOverline,
+                                    title = s.emptyLibraryTitle,
+                                    description = s.emptyLibraryDescription,
+                                    actionLabel = s.actionCreateFirstNotebook,
                                     actionIcon = PhosphorIcons.Regular.Plus,
                                     onActionClick = { showCreateDialog = true }
                                 )
@@ -515,9 +521,9 @@ fun HomeScreen(
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         EditorialSectionHeader(
-                                            title = "Continuar Escrevendo",
+                                            title = s.sectionContinueWriting,
                                             count = recentPages.size,
-                                            subtitle = "Folhas recentes"
+                                            subtitle = s.sectionContinueWritingSubtitle
                                         )
 
                                         LazyRow(
@@ -553,9 +559,9 @@ fun HomeScreen(
                                 span = { GridItemSpan(maxLineSpan) }
                             ) {
                                 EditorialSectionHeader(
-                                    title = "Coleção de Cadernos",
+                                    title = s.sectionNotebookCollection,
                                     count = filteredNotebooks.size,
-                                    subtitle = if (searchQuery.isBlank()) "Estante principal" else "Filtro ativo"
+                                    subtitle = if (searchQuery.isBlank()) s.sectionMainShelfSubtitle else s.sectionActiveFilterSubtitle
                                 )
                             }
 
@@ -578,8 +584,8 @@ fun HomeScreen(
                                         viewModel.moveNotebookToTrash(nb.id)
                                         feedbackBanner = EditorialFeedbackBannerState(
                                             type = EditorialFeedbackType.SUCCESS,
-                                            title = "Movido para a lixeira",
-                                            message = "'${nb.title}' pode ser restaurado na aba Lixeira."
+                                            title = s.bannerMovedToTrashTitle,
+                                            message = s.bannerMovedToTrashMessage(nb.title)
                                         )
                                     }
                                 )
@@ -612,8 +618,8 @@ fun HomeScreen(
                             viewModel.restoreNotebookFromTrash(nb.id)
                             feedbackBanner = EditorialFeedbackBannerState(
                                 type = EditorialFeedbackType.SUCCESS,
-                                title = "Caderno restaurado",
-                                message = "'${nb.title}' voltou para a sua biblioteca."
+                                title = s.bannerNotebookRestoredTitle,
+                                message = s.bannerNotebookRestoredMessage(nb.title)
                             )
                         },
                         onDeleteNotebookPermanently = { notebookToDeletePermanently = it },
@@ -621,8 +627,8 @@ fun HomeScreen(
                             viewModel.restorePageFromTrash(pg.id)
                             feedbackBanner = EditorialFeedbackBannerState(
                                 type = EditorialFeedbackType.SUCCESS,
-                                title = "Página restaurada",
-                                message = "'${pg.title}' foi restaurada ao caderno."
+                                title = s.bannerPageRestoredTitle,
+                                message = s.bannerPageRestoredMessage(pg.title)
                             )
                         },
                         onDeletePagePermanently = { pageToDeletePermanently = it },
@@ -631,6 +637,18 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    // Diálogo de Escolha de Idioma
+    if (showLanguagePickerDialog) {
+        LanguagePickerDialog(
+            currentPreference = appLanguage,
+            onSelectLanguage = { lang ->
+                viewModel.setAppLanguage(lang)
+                showLanguagePickerDialog = false
+            },
+            onDismiss = { showLanguagePickerDialog = false }
+        )
     }
 
     // Diálogo de Criação de Novo Caderno
@@ -642,8 +660,8 @@ fun HomeScreen(
                 showCreateDialog = false
                 feedbackBanner = EditorialFeedbackBannerState(
                     type = EditorialFeedbackType.SUCCESS,
-                    title = "Caderno criado",
-                    message = "Abrindo '$title'..."
+                    title = s.bannerNotebookCreatedTitle,
+                    message = s.bannerNotebookCreatedMessage(title)
                 )
                 notebooks.find { it.title == title }?.let { nb ->
                     onOpenNotebook(nb)
@@ -661,14 +679,14 @@ fun HomeScreen(
             containerColor = LeNoteTheme.colors.elevatedSurface,
             title = {
                 Text(
-                    text = "Esvaziar Lixeira?",
+                    text = s.emptyTrashDialogTitle,
                     style = MaterialTheme.typography.titleLarge,
                     color = LeNoteTheme.colors.inkPrimary
                 )
             },
             text = {
                 Text(
-                    text = "Todos os cadernos, seções, páginas e mídias da lixeira serão excluídos definitivamente do dispositivo. Esta ação não pode ser desfeita.",
+                    text = s.emptyTrashDialogMessage,
                     style = MaterialTheme.typography.bodyMedium,
                     color = LeNoteTheme.colors.inkSecondary
                 )
@@ -680,19 +698,19 @@ fun HomeScreen(
                         showEmptyTrashConfirmDialog = false
                         feedbackBanner = EditorialFeedbackBannerState(
                             type = EditorialFeedbackType.SUCCESS,
-                            title = "Lixeira esvaziada",
-                            message = "Todos os itens foram removidos permanentemente."
+                            title = s.bannerTrashEmptiedTitle,
+                            message = s.bannerTrashEmptiedMessage
                         )
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Esvaziar Definitivamente")
+                    Text(s.actionEmptyPermanently)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEmptyTrashConfirmDialog = false }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                    Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
                 }
             }
         )
@@ -705,14 +723,14 @@ fun HomeScreen(
             containerColor = LeNoteTheme.colors.elevatedSurface,
             title = {
                 Text(
-                    text = "Excluir Caderno Definitivamente?",
+                    text = s.deleteNotebookDialogTitle,
                     style = MaterialTheme.typography.titleLarge,
                     color = LeNoteTheme.colors.inkPrimary
                 )
             },
             text = {
                 Text(
-                    text = "O caderno '${nb.title}' e todas as suas páginas serão removidos permanentemente do armazenamento.",
+                    text = s.deleteNotebookDialogMessage(nb.title),
                     style = MaterialTheme.typography.bodyMedium,
                     color = LeNoteTheme.colors.inkSecondary
                 )
@@ -726,12 +744,12 @@ fun HomeScreen(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Excluir")
+                    Text(s.actionDelete)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { notebookToDeletePermanently = null }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                    Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
                 }
             }
         )
@@ -744,14 +762,14 @@ fun HomeScreen(
             containerColor = LeNoteTheme.colors.elevatedSurface,
             title = {
                 Text(
-                    text = "Excluir Página Definitivamente?",
+                    text = s.deletePageDialogTitle,
                     style = MaterialTheme.typography.titleLarge,
                     color = LeNoteTheme.colors.inkPrimary
                 )
             },
             text = {
                 Text(
-                    text = "A página '${p.title}' será apagada permanentemente.",
+                    text = s.deletePageDialogMessage(p.title),
                     style = MaterialTheme.typography.bodyMedium,
                     color = LeNoteTheme.colors.inkSecondary
                 )
@@ -765,12 +783,12 @@ fun HomeScreen(
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Excluir")
+                    Text(s.actionDelete)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pageToDeletePermanently = null }) {
-                    Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                    Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
                 }
             }
         )
@@ -788,8 +806,10 @@ private fun EditorialMasthead(
     isDarkMode: Boolean,
     onImportPdf: () -> Unit,
     onImportLenote: () -> Unit,
+    onOpenLanguagePicker: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
+    val s = LeNoteTheme.strings
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -811,7 +831,7 @@ private fun EditorialMasthead(
                         .background(LeNoteTheme.colors.accentWarm, CircleShape)
                 )
                 Text(
-                    text = "ATELIER DE NOTAS",
+                    text = s.homeOverline,
                     style = MaterialTheme.typography.labelSmall,
                     color = LeNoteTheme.colors.inkMuted,
                     maxLines = 1,
@@ -820,18 +840,24 @@ private fun EditorialMasthead(
             }
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 EditorialActionChip(
-                    label = "PDF",
+                    label = s.actionPdf,
                     icon = PhosphorIcons.Regular.FilePdf,
                     onClick = onImportPdf
                 )
                 EditorialActionChip(
-                    label = "Backup",
+                    label = s.actionBackup,
                     icon = PhosphorIcons.Regular.Export,
                     onClick = onImportLenote
+                )
+                // Seletor de Idioma (PT / EN / ES)
+                EditorialActionChip(
+                    label = s.language.badgeCode,
+                    icon = PhosphorIcons.Regular.Globe,
+                    onClick = onOpenLanguagePicker
                 )
                 Surface(
                     modifier = Modifier
@@ -845,7 +871,7 @@ private fun EditorialMasthead(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = if (isDarkMode) PhosphorIcons.Regular.Sun else PhosphorIcons.Regular.Moon,
-                            contentDescription = if (isDarkMode) "Modo Claro" else "Modo Noturno",
+                            contentDescription = if (isDarkMode) s.lightModeDesc else s.darkModeDesc,
                             tint = LeNoteTheme.colors.inkSecondary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -861,14 +887,14 @@ private fun EditorialMasthead(
             verticalAlignment = Alignment.Bottom
         ) {
             Text(
-                text = "Meus Cadernos",
+                text = s.homeTitle,
                 style = MaterialTheme.typography.headlineMedium,
                 color = LeNoteTheme.colors.inkPrimary,
                 maxLines = 1
             )
 
             Text(
-                text = "$notebookCount cadernos  •  $pageCount folhas",
+                text = s.homeStatsSummary(notebookCount, pageCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = LeNoteTheme.colors.inkMuted,
                 modifier = Modifier.padding(bottom = 3.dp)
@@ -894,6 +920,7 @@ private fun NotebookCoverCard(
     onMoveToTrash: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     val coverColor = remember(notebook.colorHex) {
         when (notebook.colorHex.toLong() and 0xFFFFFFFFL) {
             0xFF1976D2L -> Color(0xFF1E3A5F) // Azul Atelier Profundo
@@ -905,9 +932,9 @@ private fun NotebookCoverCard(
             else -> Color(notebook.colorHex)
         }
     }
-    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
-    val lastUpdateStr = remember(notebook.updatedAt) {
-        dateFormat.format(Date(notebook.updatedAt)).uppercase()
+    val dateFormat = remember(s.language) { SimpleDateFormat("dd MMM yyyy", s.language.locale) }
+    val lastUpdateStr = remember(notebook.updatedAt, s.language) {
+        dateFormat.format(Date(notebook.updatedAt)).uppercase(s.language.locale)
     }
     var showMenu by remember { mutableStateOf(false) }
 
@@ -990,7 +1017,7 @@ private fun NotebookCoverCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "CADERNO",
+                                text = s.cardNotebookOverline,
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 9.sp,
                                     letterSpacing = 1.sp
@@ -1005,7 +1032,7 @@ private fun NotebookCoverCard(
                                 ) {
                                     Icon(
                                         imageVector = PhosphorIcons.Regular.DotsThreeVertical,
-                                        contentDescription = "Opções do caderno",
+                                        contentDescription = s.menuNotebookOptionsDesc,
                                         tint = LeNotePalette.CharcoalText,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -1019,7 +1046,7 @@ private fun NotebookCoverCard(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                "Exportar (.lenote)",
+                                                s.menuExportLenote,
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
                                         },
@@ -1038,7 +1065,7 @@ private fun NotebookCoverCard(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                "Mover para Lixeira",
+                                                s.menuMoveToTrash,
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.error
                                             )
@@ -1075,7 +1102,7 @@ private fun NotebookCoverCard(
                         HorizontalDivider(color = LeNotePalette.HairlineBorder)
 
                         Text(
-                            text = "$sectionCount seções  •  $pageCount pág.",
+                            text = s.cardNotebookStats(sectionCount, pageCount),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = LeNotePalette.CharcoalText
                         )
@@ -1101,7 +1128,7 @@ private fun NotebookCoverCard(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = PhosphorIcons.Regular.CaretRight,
-                                contentDescription = "Abrir caderno",
+                                contentDescription = s.openNotebookDesc,
                                 tint = Color.White.copy(alpha = 0.92f),
                                 modifier = Modifier.size(12.dp)
                             )
@@ -1128,14 +1155,15 @@ private fun RecentPageCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     val thumbBitmap = remember(page.id, page.updatedAt, thumbnailVersion) {
         if (thumbnailFile != null && thumbnailFile.exists()) {
             runCatching { BitmapFactory.decodeFile(thumbnailFile.absolutePath)?.asImageBitmap() }.getOrNull()
         } else null
     }
 
-    val timeFormat = remember { SimpleDateFormat("dd MMM • HH:mm", Locale.getDefault()) }
-    val formattedTime = remember(page.updatedAt) { timeFormat.format(Date(page.updatedAt)) }
+    val timeFormat = remember(s.language) { SimpleDateFormat("dd MMM • HH:mm", s.language.locale) }
+    val formattedTime = remember(page.updatedAt, s.language) { timeFormat.format(Date(page.updatedAt)) }
 
     Surface(
         modifier = modifier
@@ -1188,7 +1216,7 @@ private fun RecentPageCard(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = PhosphorIcons.Fill.Star,
-                                contentDescription = "Favorita",
+                                contentDescription = s.favoritePageDesc,
                                 tint = LeNoteTheme.colors.goldStar,
                                 modifier = Modifier.size(12.dp)
                             )
@@ -1250,6 +1278,7 @@ private fun FavoritesContent(
     onOpenPage: (PageEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val s = LeNoteTheme.strings
     if (favoritePages.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -1257,9 +1286,9 @@ private fun FavoritesContent(
         ) {
             EditorialEmptyState(
                 icon = PhosphorIcons.Regular.Star,
-                overline = "Coleção de Destaques",
-                title = "Nenhuma página favorita",
-                description = "Toque no ícone de estrela no topo do canvas ou na barra lateral para fixar suas folhas mais importantes aqui."
+                overline = s.emptyFavoritesOverline,
+                title = s.emptyFavoritesTitle,
+                description = s.emptyFavoritesDescription
             )
         }
     } else {
@@ -1272,9 +1301,9 @@ private fun FavoritesContent(
         ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 EditorialSectionHeader(
-                    title = "Folhas Favoritas",
+                    title = s.sectionFavoritePages,
                     count = favoritePages.size,
-                    subtitle = "Acesso rápido"
+                    subtitle = s.sectionFavoritePagesSubtitle
                 )
             }
             items(favoritePages, key = { "fav_${it.id}" }) { page ->
@@ -1317,6 +1346,7 @@ private fun CreateNotebookDialog(
     onDismiss: () -> Unit,
     onCreate: (title: String, colorArgb: Int) -> Unit
 ) {
+    val s = LeNoteTheme.strings
     var title by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf(NotebookCoverColors.first()) }
 
@@ -1326,12 +1356,12 @@ private fun CreateNotebookDialog(
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "NOVO VOLUME",
+                    text = s.createNotebookOverline,
                     style = MaterialTheme.typography.labelMedium,
                     color = LeNoteTheme.colors.inkMuted
                 )
                 Text(
-                    text = "Criar Caderno",
+                    text = s.createNotebookTitle,
                     style = MaterialTheme.typography.headlineSmall,
                     color = LeNoteTheme.colors.inkPrimary
                 )
@@ -1342,8 +1372,8 @@ private fun CreateNotebookDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Título do Caderno") },
-                    placeholder = { Text("Ex: Arquitetura, Diário de Campo...") },
+                    label = { Text(s.notebookTitleLabel) },
+                    placeholder = { Text(s.notebookTitlePlaceholder) },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1355,7 +1385,7 @@ private fun CreateNotebookDialog(
 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "TONALIDADE DA ENCADERNAÇÃO",
+                        text = s.notebookBindingColorLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = LeNoteTheme.colors.inkSecondary
                     )
@@ -1384,7 +1414,7 @@ private fun CreateNotebookDialog(
                                 if (isSelected) {
                                     Icon(
                                         imageVector = PhosphorIcons.Regular.Check,
-                                        contentDescription = "Selecionado",
+                                        contentDescription = null,
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -1398,7 +1428,7 @@ private fun CreateNotebookDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val finalTitle = title.trim().ifEmpty { "Novo Caderno" }
+                    val finalTitle = title.trim().ifEmpty { s.defaultNewNotebookName }
                     val argb = (selectedColor.value shr 32).toInt()
                     onCreate(finalTitle, argb)
                 },
@@ -1408,12 +1438,119 @@ private fun CreateNotebookDialog(
                     contentColor = Color.White
                 )
             ) {
-                Text("Criar Caderno")
+                Text(s.actionCreateNotebook)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = LeNoteTheme.colors.inkSecondary)
+                Text(s.actionCancel, color = LeNoteTheme.colors.inkSecondary)
+            }
+        }
+    )
+}
+
+/**
+ * Diálogo Editorial para seleção de Idioma do Aplicativo (Automático Sistema Android, Português, English, Español).
+ */
+@Composable
+private fun LanguagePickerDialog(
+    currentPreference: AppLanguage,
+    onSelectLanguage: (AppLanguage) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val s = LeNoteTheme.strings
+    val options = listOf(
+        Triple(AppLanguage.SYSTEM, s.languageSystemOption, s.languageSystemSubtitle(s.language)),
+        Triple(AppLanguage.PT, s.languagePortuguese, "PT-BR / PT"),
+        Triple(AppLanguage.EN, s.languageEnglish, "EN-US / EN"),
+        Triple(AppLanguage.ES, s.languageSpanish, "ES-ES / ES")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = LeNoteTheme.colors.elevatedSurface,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = s.languagePickerOverline,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LeNoteTheme.colors.inkMuted
+                )
+                Text(
+                    text = s.languagePickerTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = LeNoteTheme.colors.inkPrimary
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                options.forEach { (lang, label, subtitle) ->
+                    val isSelected = currentPreference == lang
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSelectLanguage(lang) },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) {
+                            LeNoteTheme.colors.accentPrimaryContainer.copy(alpha = 0.55f)
+                        } else {
+                            LeNoteTheme.colors.tonalSurface.copy(alpha = 0.45f)
+                        },
+                        border = BorderStroke(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.hairlineBorder
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (isSelected) LeNoteTheme.colors.accentPrimary else LeNoteTheme.colors.inkPrimary
+                                )
+                                Text(
+                                    text = subtitle,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = LeNoteTheme.colors.inkMuted
+                                )
+                            }
+
+                            if (isSelected) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = LeNoteTheme.colors.accentPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.Check,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(s.actionClose, color = LeNoteTheme.colors.accentPrimary)
             }
         }
     )
@@ -1432,7 +1569,8 @@ fun TrashContent(
     onDeletePagePermanently: (PageEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+    val s = LeNoteTheme.strings
+    val dateFormat = remember(s.language) { SimpleDateFormat("dd/MM/yyyy HH:mm", s.language.locale) }
 
     if (deletedNotebooks.isEmpty() && deletedPages.isEmpty()) {
         Box(
@@ -1441,9 +1579,9 @@ fun TrashContent(
         ) {
             EditorialEmptyState(
                 icon = PhosphorIcons.Regular.Trash,
-                overline = "Arquivo de Exclusão",
-                title = "A lixeira está vazia",
-                description = "Cadernos e páginas removidos ficam arquivados aqui temporariamente antes da exclusão definitiva."
+                overline = s.emptyTrashOverline,
+                title = s.emptyTrashTitle,
+                description = s.emptyTrashDescription
             )
         }
     } else {
@@ -1455,13 +1593,13 @@ fun TrashContent(
             if (deletedNotebooks.isNotEmpty()) {
                 item {
                     EditorialSectionHeader(
-                        title = "Cadernos Arquivados na Lixeira",
+                        title = s.sectionDeletedNotebooks,
                         count = deletedNotebooks.size
                     )
                 }
                 items(deletedNotebooks, key = { "nb_${it.id}" }) { nb ->
-                    val delDate = remember(nb.deletedAt) {
-                        nb.deletedAt?.let { dateFormat.format(Date(it)) } ?: "Data desconhecida"
+                    val delDate = remember(nb.deletedAt, s.language) {
+                        nb.deletedAt?.let { dateFormat.format(Date(it)) } ?: s.unknownDate
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -1495,7 +1633,7 @@ fun TrashContent(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "Excluído em $delDate",
+                                        text = s.deletedOnDate(delDate),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = LeNoteTheme.colors.inkMuted
                                     )
@@ -1507,7 +1645,7 @@ fun TrashContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 EditorialActionChip(
-                                    label = "Restaurar",
+                                    label = s.actionRestore,
                                     icon = PhosphorIcons.Regular.ArrowCounterClockwise,
                                     onClick = { onRestoreNotebook(nb) }
                                 )
@@ -1517,7 +1655,7 @@ fun TrashContent(
                                 ) {
                                     Icon(
                                         imageVector = PhosphorIcons.Regular.Trash,
-                                        contentDescription = "Excluir definitivamente",
+                                        contentDescription = s.deletePermanentlyDesc,
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -1532,13 +1670,13 @@ fun TrashContent(
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
                     EditorialSectionHeader(
-                        title = "Folhas Soltas na Lixeira",
+                        title = s.sectionDeletedPages,
                         count = deletedPages.size
                     )
                 }
                 items(deletedPages, key = { "pg_${it.id}" }) { page ->
-                    val delDate = remember(page.deletedAt) {
-                        page.deletedAt?.let { dateFormat.format(Date(it)) } ?: "Data desconhecida"
+                    val delDate = remember(page.deletedAt, s.language) {
+                        page.deletedAt?.let { dateFormat.format(Date(it)) } ?: s.unknownDate
                     }
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -1573,7 +1711,7 @@ fun TrashContent(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "Excluído em $delDate",
+                                        text = s.deletedOnDate(delDate),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = LeNoteTheme.colors.inkMuted
                                     )
@@ -1585,7 +1723,7 @@ fun TrashContent(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 EditorialActionChip(
-                                    label = "Restaurar",
+                                    label = s.actionRestore,
                                     icon = PhosphorIcons.Regular.ArrowCounterClockwise,
                                     onClick = { onRestorePage(page) }
                                 )
@@ -1595,7 +1733,7 @@ fun TrashContent(
                                 ) {
                                     Icon(
                                         imageVector = PhosphorIcons.Regular.Trash,
-                                        contentDescription = "Excluir definitivamente",
+                                        contentDescription = s.deletePermanentlyDesc,
                                         tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.size(16.dp)
                                     )
