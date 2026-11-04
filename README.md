@@ -18,7 +18,9 @@
   <img src="https://img.shields.io/badge/Language-Kotlin_2.1-7F52FF?logo=kotlin&logoColor=white" alt="Language: Kotlin"/>
   <img src="https://img.shields.io/badge/Engine-Jetpack_Ink_1.0-4285F4?logo=google&logoColor=white" alt="Engine: Jetpack Ink"/>
   <img src="https://img.shields.io/badge/UI-Custom_Editorial_Design_System-1B365D?logo=jetpackcompose&logoColor=white" alt="UI: Jetpack Compose"/>
-  <img src="https://img.shields.io/badge/Architecture-Local--First_SQLite-003B57?logo=sqlite&logoColor=white" alt="Architecture: Local-First"/>
+  <img src="https://img.shields.io/badge/i18n-PT_%7C_EN_%7C_ES-B84A39" alt="Languages: PT | EN | ES"/>
+  <img src="https://img.shields.io/badge/License-MIT-2E5A44" alt="License: MIT"/>
+  <a href="https://github.com/LirielC/LeNote/releases/latest"><img src="https://img.shields.io/github/v/release/LirielC/LeNote?label=Download_APK&color=1B365D" alt="Download Latest APK"/></a>
 </p>
 
 ---
@@ -290,6 +292,10 @@ LeNote/
    ```
 
 ---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
 ## Author
 
