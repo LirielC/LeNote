@@ -15,22 +15,41 @@ android {
         applicationId = "io.github.lirielc.lenote"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Requisito do F-Droid: não incluir bloco de metadados de dependências criptografado com chave do Google
+    // Requisito do F-Droid / IzzyOnDroid: não incluir bloco de metadados criptografado com chave do Google
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
     }
 
+    val releaseKeystoreFile = file(
+        System.getenv("LENOTE_KEYSTORE_PATH")
+            ?: "${System.getProperty("user.home")}/.android/lenote-release-key.jks"
+    )
+    val hasReleaseKeystore = releaseKeystoreFile.exists()
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = System.getenv("LENOTE_KEYSTORE_PASSWORD") ?: "LeNoteRelease2026!"
+                keyAlias = System.getenv("LENOTE_KEY_ALIAS") ?: "lenote_release"
+                keyPassword = System.getenv("LENOTE_KEY_PASSWORD") ?: "LeNoteRelease2026!"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -69,9 +88,6 @@ dependencies {
     implementation(libs.androidx.ink.rendering)
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
-
-    // ML Kit Digital Ink Recognition
-    implementation(libs.mlkit.digital.ink)
 
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")

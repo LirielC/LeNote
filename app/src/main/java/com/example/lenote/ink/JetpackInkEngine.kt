@@ -2900,6 +2900,51 @@ class JetpackInkEngine : InkingEngine {
         syncStateAndRender()
     }
 
+    /**
+     * Embeleza geometricamente os traços selecionados (suavização caligráfica + alinhamento sutil de linha de base)
+     * 100% offline usando geometria vetorial nativa do Jetpack Ink.
+     */
+    fun beautifySelectedStrokesGeometrically(deltaY: Float = 0f) {
+        if (selectedStrokes.isEmpty()) return
+        val beforeSnapshot = ArrayList(finishedStrokes)
+        val newSelectedSet: MutableSet<Stroke> =
+            java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+        val updatedList = ArrayList<Stroke>(finishedStrokes.size)
+
+        for (s in finishedStrokes) {
+            if (selectedStrokes.contains(s)) {
+                val smoothed = StrokeSmoother.smoothStroke(s, SmoothingLevel.MEDIUM)
+                val refined = if (Math.abs(deltaY) >= 0.5f) {
+                    LassoSelectionHelper.translateStroke(smoothed, 0f, deltaY)
+                } else {
+                    smoothed
+                }
+                PartialStrokeEraser.prewarmStroke(refined)
+                updatedList.add(refined)
+                newSelectedSet.add(refined)
+            } else {
+                updatedList.add(s)
+            }
+        }
+
+        finishedStrokes.clear()
+        finishedStrokes.addAll(updatedList)
+        selectedStrokes.clear()
+        selectedStrokes.addAll(newSelectedSet)
+
+        undoStack.add(
+            InkHistoryOperation.TransformStrokes(
+                beforeStrokes = beforeSnapshot,
+                afterStrokes = ArrayList(finishedStrokes)
+            )
+        )
+        redoStack.clear()
+        contentVersionCounter++
+        currentSelectionBoundsWorld = LassoSelectionHelper.computeCombinedBounds(selectedStrokes)
+        finishedStrokesView?.updateLassoOverlay(emptyList(), currentSelectionBoundsWorld)
+        syncStateAndRender()
+    }
+
     override fun deleteSelectedStrokes() {
 
         if (selectedStrokes.isEmpty()) return

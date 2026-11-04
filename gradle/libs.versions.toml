@@ -41,9 +41,6 @@ androidx-ink-rendering = { group = "androidx.ink", name = "ink-rendering", versi
 androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "ink" }
 androidx-ink-storage = { group = "androidx.ink", name = "ink-storage", version.ref = "ink" }
 
-# Google ML Kit Digital Ink Recognition
-mlkit-digital-ink = { group = "com.google.mlkit", name = "digital-ink-recognition", version.ref = "mlkitDigitalInk" }
-
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }

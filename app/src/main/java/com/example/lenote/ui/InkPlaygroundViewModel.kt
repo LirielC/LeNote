@@ -328,19 +328,26 @@ class InkPlaygroundViewModel : ViewModel() {
 
     private suspend fun indexCurrentPageHandwriting() {
         val page = _currentPage.value ?: return
-        val inkMgr = digitalInkManager ?: return
         val repo = repository ?: return
-        val strokes = engine.getFinishedStrokesSnapshot()
-        if (strokes.isEmpty()) {
-            withContext(Dispatchers.IO) {
-                repo.indexPageHandwriting(page.id, "", "")
+        // Indexa o conteúdo das caixas de texto da página no SQLite FTS5 (100% offline e FOSS)
+        val combinedText = _textBlocks.value
+            .map { it.text.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+        val boxes = _textBlocks.value
+            .filter { it.text.isNotBlank() }
+            .map { tb ->
+                RecognizedWordBox(
+                    word = tb.text.trim(),
+                    left = tb.x,
+                    top = tb.y,
+                    right = tb.x + tb.width,
+                    bottom = tb.y + tb.height
+                )
             }
-            return
-        }
-        val ocrResult = inkMgr.recognizeStrokes(strokes).getOrNull() ?: return
-        val boxesJson = WordBoxJsonSerializer.serialize(ocrResult.wordBoxes)
+        val boxesJson = if (boxes.isNotEmpty()) WordBoxJsonSerializer.serialize(boxes) else ""
         withContext(Dispatchers.IO) {
-            repo.indexPageHandwriting(page.id, ocrResult.fullText, boxesJson)
+            repo.indexPageHandwriting(page.id, combinedText, boxesJson)
         }
     }
 
@@ -886,57 +893,28 @@ class InkPlaygroundViewModel : ViewModel() {
     }
 
     /**
-     * Ação "Embelezar Caligrafia": reconhece os traços selecionados e os substitui por uma caixa
-     * de texto com fonte manuscrita elegante, preservando cor, tamanho e posição da escrita original.
+     * Ação "Embelezar Caligrafia": refina geometricamente os traços selecionados (suavização caligráfica
+     * + alinhamento de linha de base) preservando os traços vetoriais 100% offline.
      */
     suspend fun beautifySelectedStrokesWithFont(): Result<String> {
-        val inkMgr = digitalInkManager ?: return Result.failure(IllegalStateException("DigitalInkManager não inicializado"))
         val selected = engine.getSelectedStrokesSnapshot()
         if (selected.isEmpty()) {
             return Result.failure(IllegalStateException("Nenhum traço selecionado com o Laço."))
         }
-        val curPage = _currentPage.value ?: return Result.failure(IllegalStateException("Página não encontrada."))
-        val ocrResult = inkMgr.recognizeStrokes(selected).getOrNull()
-            ?: return Result.failure(IllegalStateException("Não foi possível reconhecer o texto manuscrito."))
-
-        val recognizedText = ocrResult.fullText.trim()
-        if (recognizedText.isEmpty()) {
-            return Result.failure(IllegalStateException("Nenhum caractere reconhecido nos traços selecionados."))
+        val inkMgr = digitalInkManager
+        val ocrResult = inkMgr?.recognizeStrokes(selected)?.getOrNull()
+        val wordBottoms = ocrResult?.wordBoxes?.map { it.bottom }.orEmpty()
+        val bounds = engine.state.value.selectionBoundsWorld
+        val effectiveBottoms = if (wordBottoms.isNotEmpty()) wordBottoms else listOfNotNull(bounds?.yMax)
+        val deltaY = if (effectiveBottoms.isNotEmpty()) {
+            com.example.lenote.ink.ShapeSnappingHelper.calculateBaselineSnapDeltaY(effectiveBottoms, 48f)
+        } else {
+            0f
         }
 
-        val bounds = engine.state.value.selectionBoundsWorld
-        val worldX = bounds?.xMin ?: 100f
-        val worldY = bounds?.yMin ?: 100f
-        val boxWidth = Math.max(160f, ((bounds?.let { it.xMax - it.xMin }) ?: 200f) + 30f)
-        val boxHeight = Math.max(60f, ((bounds?.let { it.yMax - it.yMin }) ?: 60f) + 10f)
-
-        // Calcula cor e tamanho da fonte proporcionais ao tamanho original da escrita
-        val sampleBrush = selected.firstOrNull()?.brush
-        val textColor = sampleBrush?.colorIntArgb ?: 0xFF0F172A.toInt()
-        val calculatedFontSize = (Math.max(16f, ((bounds?.let { it.yMax - it.yMin }) ?: 40f) * 0.55f)).coerceIn(16f, 72f)
-
-        // Cria o bloco de texto correspondente
-        val textBlock = com.example.lenote.data.CanvasTextBlock(
-            id = java.util.UUID.randomUUID().toString(),
-            pageId = curPage.id,
-            text = recognizedText,
-            x = worldX,
-            y = worldY,
-            width = boxWidth,
-            height = boxHeight,
-            textColor = textColor,
-            fontSize = calculatedFontSize,
-            zIndex = (_textBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
-        )
-
-        repository?.upsertTextBlock(textBlock)
-        _textBlocks.value = repository?.getTextBlocks(curPage.id) ?: emptyList()
-
-        // Remove os traços originais da folha e limpa o laço
-        engine.deleteSelectedStrokes()
+        engine.beautifySelectedStrokesGeometrically(deltaY)
         scheduleAutoSave()
-
-        return Result.success(recognizedText)
+        return Result.success("Caligrafia refinada")
     }
 
     suspend fun convertSelectedStrokesToText(): Result<String> {
