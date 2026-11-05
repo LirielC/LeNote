@@ -315,36 +315,29 @@ To install directly onto a connected Android device or emulator:
 ```
 
 ### 4. Configure Production Release Signing & Build Release APK
-For security, **no keystore files or passwords are committed to this repository**, and the `release` build type never falls back to a debug key.
+For security, **no keystore files or passwords are committed to this repository**, and the `release` build type never falls back to a debug key or unsigned artifact.
 
-To generate a signed production APK (`app/build/outputs/apk/release/app-release.apk`), provide your own keystore via either a local `keystore.properties` file (ignored by Git) or environment variables:
+Building any `Release` variant task (`assembleRelease`, `bundleRelease`, `packageRelease`, etc.) strictly requires all four environment variables below to be set and pointing to an existing keystore file; otherwise, Gradle immediately aborts the build with a clear error message:
 
-#### Option A: Using `keystore.properties` (Local Machine)
-Create a `keystore.properties` file in the root directory of the project:
-```properties
-storeFile=/absolute/path/to/your-release-key.jks
-storePassword=YOUR_STORE_PASSWORD
-keyAlias=YOUR_KEY_ALIAS
-keyPassword=YOUR_KEY_PASSWORD
-```
-
-#### Option B: Using Environment Variables (CI / Shell)
 ```bash
+# Linux / macOS
 export LENOTE_KEYSTORE_PATH="/absolute/path/to/your-release-key.jks"
 export LENOTE_KEYSTORE_PASSWORD="YOUR_STORE_PASSWORD"
 export LENOTE_KEY_ALIAS="YOUR_KEY_ALIAS"
 export LENOTE_KEY_PASSWORD="YOUR_KEY_PASSWORD"
+
+./gradlew assembleRelease
 ```
 
-Then run the release build:
-```bash
-# Linux / macOS
-./gradlew assembleRelease
-
+```powershell
 # Windows (PowerShell)
+$env:LENOTE_KEYSTORE_PATH = "C:\path\to\your-release-key.jks"
+$env:LENOTE_KEYSTORE_PASSWORD = "YOUR_STORE_PASSWORD"
+$env:LENOTE_KEY_ALIAS = "YOUR_KEY_ALIAS"
+$env:LENOTE_KEY_PASSWORD = "YOUR_KEY_PASSWORD"
+
 .\gradlew.bat assembleRelease
 ```
-*(Note: If neither `keystore.properties` nor the `LENOTE_KEYSTORE_*` environment variables are provided, `assembleRelease` produces an unsigned APK at `app/build/outputs/apk/release/app-release-unsigned.apk` that you can sign manually using `apksigner`.)*
 
 ---
 

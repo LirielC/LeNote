@@ -3,30 +3,76 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-import java.util.Properties
+val releaseStorePath = providers.environmentVariable("LENOTE_KEYSTORE_PATH")
+val releaseStorePassword = providers.environmentVariable("LENOTE_KEYSTORE_PASSWORD")
+val releaseKeyAlias = providers.environmentVariable("LENOTE_KEY_ALIAS")
+val releaseKeyPassword = providers.environmentVariable("LENOTE_KEY_PASSWORD")
 
-val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = Properties().apply {
-    if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { load(it) }
+val releaseKeystoreFile = releaseStorePath.orNull?.takeIf { it.isNotBlank() }?.let { file(it) }
+val hasValidReleaseKeystore = releaseKeystoreFile != null &&
+    releaseKeystoreFile.exists() &&
+    releaseKeystoreFile.isFile &&
+    !releaseStorePassword.orNull.isNullOrBlank() &&
+    !releaseKeyAlias.orNull.isNullOrBlank() &&
+    !releaseKeyPassword.orNull.isNullOrBlank()
+
+abstract class VerifyReleaseSigningTask : DefaultTask() {
+    @get:Input
+    @get:Optional
+    abstract val storePath: Property<String>
+
+    @get:Input
+    @get:Optional
+    abstract val storePassword: Property<String>
+
+    @get:Input
+    @get:Optional
+    abstract val keyAlias: Property<String>
+
+    @get:Input
+    @get:Optional
+    abstract val keyPassword: Property<String>
+
+    @TaskAction
+    fun verify() {
+        val path = storePath.orNull
+        val sPass = storePassword.orNull
+        val alias = keyAlias.orNull
+        val kPass = keyPassword.orNull
+
+        val missingVars = buildList {
+            if (path.isNullOrBlank()) add("LENOTE_KEYSTORE_PATH")
+            if (sPass.isNullOrBlank()) add("LENOTE_KEYSTORE_PASSWORD")
+            if (alias.isNullOrBlank()) add("LENOTE_KEY_ALIAS")
+            if (kPass.isNullOrBlank()) add("LENOTE_KEY_PASSWORD")
+        }
+
+        val ksFile = path?.takeIf { it.isNotBlank() }?.let { File(it) }
+        val fileExistsAndValid = ksFile != null && ksFile.exists() && ksFile.isFile
+
+        if (missingVars.isNotEmpty() || !fileExistsAndValid) {
+            val fileProblem = if (!path.isNullOrBlank() && !fileExistsAndValid) {
+                "\nArquivo de keystore não encontrado ou inválido em: $path"
+            } else {
+                ""
+            }
+            throw GradleException(
+                "Build Release interrompido: assinatura de produção não configurada.\n" +
+                    "Variáveis de ambiente obrigatórias ausentes: ${if (missingVars.isEmpty()) "nenhuma" else missingVars.joinToString(", ")}$fileProblem\n" +
+                    "Defina exclusivamente as variáveis de ambiente LENOTE_KEYSTORE_PATH, LENOTE_KEYSTORE_PASSWORD, LENOTE_KEY_ALIAS e LENOTE_KEY_PASSWORD antes de executar tarefas da variante Release."
+            )
+        }
     }
 }
 
-val releaseStorePath = System.getenv("LENOTE_KEYSTORE_PATH")
-    ?: keystoreProperties.getProperty("storeFile")
-val releaseStorePassword = System.getenv("LENOTE_KEYSTORE_PASSWORD")
-    ?: keystoreProperties.getProperty("storePassword")
-val releaseKeyAlias = System.getenv("LENOTE_KEY_ALIAS")
-    ?: keystoreProperties.getProperty("keyAlias")
-val releaseKeyPassword = System.getenv("LENOTE_KEY_PASSWORD")
-    ?: keystoreProperties.getProperty("keyPassword")
-
-val releaseKeystoreFile = releaseStorePath?.let { file(it) }
-val hasReleaseSigning = releaseKeystoreFile != null &&
-    releaseKeystoreFile.exists() &&
-    !releaseStorePassword.isNullOrBlank() &&
-    !releaseKeyAlias.isNullOrBlank() &&
-    !releaseKeyPassword.isNullOrBlank()
+val verifyReleaseSigning = tasks.register<VerifyReleaseSigningTask>("verifyReleaseSigning") {
+    group = "verification"
+    description = "Verifica se as variáveis de ambiente de assinatura de produção estão configuradas antes de gerar artefatos Release."
+    storePath.set(releaseStorePath)
+    storePassword.set(releaseStorePassword)
+    keyAlias.set(releaseKeyAlias)
+    keyPassword.set(releaseKeyPassword)
+}
 
 android {
     namespace = "com.example.lenote"
@@ -40,19 +86,19 @@ android {
         applicationId = "io.github.lirielc.lenote"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
-        if (hasReleaseSigning) {
+        if (hasValidReleaseKeystore) {
             create("release") {
                 storeFile = releaseKeystoreFile
-                storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
+                storePassword = releaseStorePassword.orNull
+                keyAlias = releaseKeyAlias.orNull
+                keyPassword = releaseKeyPassword.orNull
             }
         }
     }
@@ -60,9 +106,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            // A assinatura de release SÓ é aplicada quando uma keystore de produção válida é fornecida
-            // via variáveis de ambiente ou keystore.properties (nunca faz fallback para debug key).
-            if (hasReleaseSigning) {
+            // Sem fallback para debug key: a assinatura de produção exige as 4 variáveis de ambiente.
+            if (hasValidReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
             proguardFiles(
@@ -79,6 +124,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+// Vincula a tarefa verifyReleaseSigning a todas as tarefas da variante Release (preReleaseBuild,
+// packageRelease, bundleRelease, assembleRelease, signReleaseBundle, validateSigningRelease, etc.).
+// Totalmente compatível com Gradle 9.4.1, AGP 9.2.1 e Configuration Cache (--configuration-cache).
+tasks.configureEach {
+    if (name != "verifyReleaseSigning" &&
+        (name.contains("Release", ignoreCase = false) || name == "assemble" || name == "bundle")
+    ) {
+        dependsOn(verifyReleaseSigning)
     }
 }
 
