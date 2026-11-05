@@ -1,4 +1,4 @@
-name: Android Release APK
+name: Validate Android Release APK
 
 on:
   push:
@@ -7,11 +7,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build-and-release:
+  build-release:
+    name: Build and validate production APK
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - name: Checkout repository
@@ -20,39 +22,66 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-          cache: 'gradle'
+          cache: gradle
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission for Gradle wrapper
         run: chmod +x gradlew
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
-      - name: Build Release & Debug APKs
-        run: ./gradlew assembleRelease assembleDebug
-
-      - name: Rename APKs for Release
+      - name: Build and validate signed Release APK
+        env:
+          LENOTE_KEYSTORE_BASE64: ${{ secrets.LENOTE_KEYSTORE_BASE64 }}
+          LENOTE_KEYSTORE_PASSWORD: ${{ secrets.LENOTE_KEYSTORE_PASSWORD }}
+          LENOTE_KEY_ALIAS: ${{ secrets.LENOTE_KEY_ALIAS }}
+          LENOTE_KEY_PASSWORD: ${{ secrets.LENOTE_KEY_PASSWORD }}
         run: |
-          TAG_NAME="${GITHUB_REF_NAME:-v1.0.2}"
-          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          cp "$RELEASE_APK" "LeNote-${TAG_NAME}-release.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "LeNote-${TAG_NAME}-debug.apk"
+          set -euo pipefail
 
-      - name: Upload APK Artifacts
+          KEYSTORE_PATH="${RUNNER_TEMP}/lenote-release.jks"
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          CERTIFICATE_SHA256="88C8516EF396045B5DF29E76C20E4057B728E3156A6D43AA88117B9C84F698BA"
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -mindepth 2 -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+
+          cleanup() {
+            rm -f -- "$KEYSTORE_PATH"
+          }
+          trap cleanup EXIT
+
+          test -n "$LENOTE_KEYSTORE_BASE64"
+          test -n "$LENOTE_KEYSTORE_PASSWORD"
+          test -n "$LENOTE_KEY_ALIAS"
+          test -n "$LENOTE_KEY_PASSWORD"
+          test -n "$APKSIGNER"
+
+          printf '%s' "$LENOTE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+
+          # Validate the actual keystore credentials before Gradle starts the Release build.
+          keytool -list \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass "$LENOTE_KEYSTORE_PASSWORD" \
+            -alias "$LENOTE_KEY_ALIAS" \
+            -keypass "$LENOTE_KEY_PASSWORD" \
+            > /dev/null 2>&1
+
+          export LENOTE_KEYSTORE_PATH="$KEYSTORE_PATH"
+          ./gradlew verifyReleaseSigning
+          ./gradlew assembleRelease
+
+          test -f "$APK_PATH"
+          "$APKSIGNER" verify --verbose --print-certs "$APK_PATH" > "${RUNNER_TEMP}/apksigner.txt"
+          ACTUAL_CERTIFICATE_SHA256="$(awk -F': ' '/Signer #1 certificate SHA-256 digest/ { print toupper($2) }' "${RUNNER_TEMP}/apksigner.txt")"
+          test "$ACTUAL_CERTIFICATE_SHA256" = "$CERTIFICATE_SHA256"
+          rm -f -- "${RUNNER_TEMP}/apksigner.txt"
+
+      - name: Upload validation artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LeNote-APKs
-          path: |
-            LeNote-*-release.apk
-            LeNote-*-debug.apk
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            LeNote-*-release.apk
-            LeNote-*-debug.apk
-          generate_release_notes: true
+          name: LeNote-release-validation-${{ github.sha }}
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
