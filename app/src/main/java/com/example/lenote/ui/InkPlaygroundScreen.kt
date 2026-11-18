@@ -1,7 +1,9 @@
 package com.example.lenote.ui
 
 import android.content.ActivityNotFoundException
+import android.graphics.BitmapFactory
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +48,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,7 +79,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,6 +92,9 @@ import androidx.ink.authoring.InProgressStrokesView
 import com.example.lenote.data.PageEntity
 import com.example.lenote.export.ExportResult
 import com.example.lenote.export.ExportViewerHelper
+import com.example.lenote.export.GeminiPromptAction
+import com.example.lenote.export.GeminiShareHelper
+import com.example.lenote.export.GeminiShareOutcome
 import com.example.lenote.export.PageExporter
 import com.example.lenote.ink.EraserSize
 import com.example.lenote.ink.FinishedStrokesView
@@ -114,6 +123,17 @@ data class ExportConfirmationState(
     val subtitle: String,
     val isError: Boolean = false,
     val canOpen: Boolean = true
+)
+
+internal fun visibleImageOrigin(
+    viewportSize: IntSize,
+    zoom: Float,
+    panX: Float,
+    panY: Float,
+    imageSize: Float = 300f
+): Offset = Offset(
+    x = (viewportSize.width / 2f - panX) / zoom - imageSize / 2f,
+    y = (viewportSize.height / 2f - panY) / zoom - imageSize / 2f
 )
 
 /**
@@ -148,23 +168,59 @@ fun InkPlaygroundScreen(
     val textBlocks by (viewModel?.textBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
     val imageBlocks by (viewModel?.imageBlocks ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
     val isTextToolActive by (viewModel?.isTextToolActive ?: kotlinx.coroutines.flow.MutableStateFlow(false)).collectAsState()
+    val engineState by engine.state.collectAsState()
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
-    // Photo picker para inserção de imagem na folha
+    // Função auxiliar para importar imagem a partir de uma URI selecionada
+    fun handlePickedImageUri(uri: android.net.Uri) {
+        val imagesDir = File(context.filesDir, "images").apply { mkdirs() }
+        val targetFile = File(imagesDir, "img_${System.currentTimeMillis()}.png")
+        try {
+            context.contentResolver.openInputStream(uri)?.use { inStream ->
+                FileOutputStream(targetFile).use { outStream ->
+                    inStream.copyTo(outStream)
+                }
+            } ?: error("Não foi possível abrir a imagem selecionada")
+            check(targetFile.length() > 0L) { "A imagem selecionada está vazia" }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(targetFile.absolutePath, bounds)
+            check(bounds.outWidth > 0 && bounds.outHeight > 0) { "Formato de imagem inválido" }
+
+            val maxSide = 360f
+            val aspect = bounds.outWidth.toFloat() / bounds.outHeight.toFloat()
+            val (imgW, imgH) = if (aspect >= 1f) {
+                maxSide to (maxSide / aspect).coerceAtLeast(80f)
+            } else {
+                (maxSide * aspect).coerceAtLeast(80f) to maxSide
+            }
+
+            val origin = visibleImageOrigin(
+                viewportSize = canvasSize,
+                zoom = engineState.zoomLevel,
+                panX = engineState.panOffsetX,
+                panY = engineState.panOffsetY,
+                imageSize = maxOf(imgW, imgH)
+            )
+            check(viewModel?.addImageBlock(targetFile, origin.x, origin.y, imgW, imgH) == true) {
+                "Nenhuma página ativa para inserir a imagem"
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("LeNoteImage", "Falha ao adicionar imagem: ${e.message}", e)
+            targetFile.delete()
+            Toast.makeText(context, "Não foi possível adicionar a imagem.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Photo picker principal + fallback GetContent para dispositivos/emuladores sem Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null) {
-            val imagesDir = File(context.filesDir, "images").apply { mkdirs() }
-            val targetFile = File(imagesDir, "img_${System.currentTimeMillis()}.png")
-            try {
-                context.contentResolver.openInputStream(uri)?.use { inStream ->
-                    FileOutputStream(targetFile).use { outStream ->
-                        inStream.copyTo(outStream)
-                    }
-                }
-                viewModel?.addImageBlock(targetFile, 150f, 150f)
-            } catch (_: Exception) {}
-        }
+        if (uri != null) handlePickedImageUri(uri)
+    }
+    val legacyImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) handlePickedImageUri(uri)
     }
 
     var localSavedStrokesData by remember { mutableStateOf<ByteArray?>(null) }
@@ -183,13 +239,12 @@ fun InkPlaygroundScreen(
     val isSidebarOpen = vmIsSidebarOpen?.value ?: false
     val isDiagnosticsVisible = vmIsDiagnosticsVisible?.value ?: localDiagnosticsVisible
 
-    val engineState by engine.state.collectAsState()
-
     var showRenamePageDialog by remember { mutableStateOf(false) }
     var renamePageInput by remember { mutableStateOf("") }
     var showSheetOptionsModal by remember { mutableStateOf(false) }
     var showTemplatePickerDialog by remember { mutableStateOf(false) }
     var showPageActionsModal by remember { mutableStateOf(false) }
+    var showPageGeminiDialog by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var showDeletePageConfirmDialog by remember { mutableStateOf(false) }
 
@@ -208,7 +263,11 @@ fun InkPlaygroundScreen(
             modifier = Modifier.fillMaxSize(),
             color = LeNoteTheme.colors.paperBackground
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { canvasSize = it }
+            ) {
                 // A) CANVAS / FOLHA: Elemento visual dominante ocupando toda a tela
                 InkCanvas(
                     engine = engine,
@@ -260,9 +319,21 @@ fun InkPlaygroundScreen(
                     engine = engine,
                     viewModel = viewModel,
                     onInsertImage = {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        try {
+                            if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(context)) {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            } else {
+                                legacyImagePickerLauncher.launch("image/*")
+                            }
+                        } catch (_: ActivityNotFoundException) {
+                            try {
+                                legacyImagePickerLauncher.launch("image/*")
+                            } catch (_: ActivityNotFoundException) {
+                                Toast.makeText(context, "Nenhum seletor de imagens disponível.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     },
                     onSave = { strokeCount ->
                         if (viewModel != null) {
@@ -285,6 +356,58 @@ fun InkPlaygroundScreen(
                     },
                     canLoad = savedStrokesData != null,
                     onPromptClear = { showClearConfirmDialog = true },
+                    onSendSelectionToGemini = { action ->
+                        val handleOutcome: (GeminiShareOutcome) -> Unit = { outcome ->
+                            if (!outcome.isSuccess) {
+                                Toast.makeText(
+                                    context,
+                                    outcome.errorMessage ?: s.geminiShareErrorMessage,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else if (outcome.promptCopiedToClipboard) {
+                                Toast.makeText(
+                                    context,
+                                    s.geminiPromptCopiedMessage,
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                        if (viewModel != null) {
+                            viewModel.shareSelectionToGemini(
+                                activityContext = context,
+                                action = action,
+                                strings = s,
+                                onComplete = handleOutcome
+                            )
+                        } else {
+                            val selectedStrokes = engine.getSelectedStrokesSnapshot()
+                            val bounds = engine.state.value.selectionBoundsWorld
+                            if (selectedStrokes.isNotEmpty() && bounds != null) {
+                                val paperColor = currentPage?.paperColor ?: 0xFFFFFFFF
+                                val pngFile = GeminiShareHelper.renderSelectionCropToPngFile(
+                                    context = context,
+                                    bounds = bounds,
+                                    selectedStrokes = selectedStrokes,
+                                    background = engine.state.value.pageBackground,
+                                    isDarkMode = paperColor == 0xFF1E293B,
+                                    paperColor = paperColor,
+                                    pdfPath = currentPage?.pdfPath,
+                                    pdfPageIndex = currentPage?.pdfPageIndex,
+                                    textBlocks = textBlocks,
+                                    imageBlocks = imageBlocks
+                                )
+                                val prompt = GeminiShareHelper.buildPrompt(action, s, isFullPage = false)
+                                handleOutcome(
+                                    GeminiShareHelper.shareImageToGemini(
+                                        context = context,
+                                        imageFile = pngFile,
+                                        prompt = prompt,
+                                        chooserTitle = s.geminiChooserTitle
+                                    )
+                                )
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
@@ -697,6 +820,10 @@ fun InkPlaygroundScreen(
                         }
                     }
                 },
+                onSendPageToGemini = {
+                    showPageActionsModal = false
+                    showPageGeminiDialog = true
+                },
                 onDeletePage = {
                     showPageActionsModal = false
                     showDeletePageConfirmDialog = true
@@ -714,6 +841,62 @@ fun InkPlaygroundScreen(
                     }
                 },
                 onDismiss = { showPageActionsModal = false }
+            )
+        }
+
+        // Diálogo de Ações Rápidas para Enviar Página Inteira ao Gemini
+        if (showPageGeminiDialog) {
+            GeminiActionPickerDialog(
+                title = s.geminiMenuPageTitle,
+                onSelectAction = { action ->
+                    showPageGeminiDialog = false
+                    val handleOutcome: (GeminiShareOutcome) -> Unit = { outcome ->
+                        if (!outcome.isSuccess) {
+                            Toast.makeText(
+                                context,
+                                outcome.errorMessage ?: s.geminiShareErrorMessage,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else if (outcome.promptCopiedToClipboard) {
+                            Toast.makeText(
+                                context,
+                                s.geminiPromptCopiedMessage,
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    if (viewModel != null) {
+                        viewModel.shareCurrentPageToGemini(
+                            activityContext = context,
+                            action = action,
+                            strings = s,
+                            onComplete = handleOutcome
+                        )
+                    } else {
+                        val paperColor = currentPage?.paperColor ?: 0xFFFFFFFF
+                        val pngFile = GeminiShareHelper.renderFullPageToPngFile(
+                            context = context,
+                            background = engine.state.value.pageBackground,
+                            strokes = engine.getFinishedStrokesSnapshot(),
+                            isDarkMode = paperColor == 0xFF1E293B,
+                            paperColor = paperColor,
+                            pdfPath = currentPage?.pdfPath,
+                            pdfPageIndex = currentPage?.pdfPageIndex,
+                            textBlocks = textBlocks,
+                            imageBlocks = imageBlocks
+                        )
+                        val prompt = GeminiShareHelper.buildPrompt(action, s, isFullPage = true)
+                        handleOutcome(
+                            GeminiShareHelper.shareImageToGemini(
+                                context = context,
+                                imageFile = pngFile,
+                                prompt = prompt,
+                                chooserTitle = s.geminiChooserTitle
+                            )
+                        )
+                    }
+                },
+                onDismiss = { showPageGeminiDialog = false }
             )
         }
 
@@ -958,6 +1141,7 @@ private fun ToolbarOverlayStateHost(
     onLoad: () -> Unit,
     canLoad: Boolean,
     onPromptClear: () -> Unit,
+    onSendSelectionToGemini: (GeminiPromptAction) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val toolbarStateFlow = remember(engine) {
@@ -1011,6 +1195,7 @@ private fun ToolbarOverlayStateHost(
                 viewModel?.alignSelectedStrokesToBaseline()
             }
         },
+        onSendSelectionToGemini = onSendSelectionToGemini,
         onSave = { onSave(state.strokeCount) },
         onLoad = onLoad,
         canLoad = canLoad,
@@ -1231,6 +1416,7 @@ fun ToolbarOverlay(
     onClearSelection: () -> Unit = {},
     onBeautifySelection: () -> Unit = {},
     onAlignBaseline: () -> Unit = {},
+    onSendSelectionToGemini: (GeminiPromptAction) -> Unit = {},
     onSave: () -> Unit,
     onLoad: () -> Unit,
     canLoad: Boolean,
@@ -1654,6 +1840,7 @@ fun ToolbarOverlay(
                 color = LeNoteTheme.colors.elevatedSurface.copy(alpha = 0.98f)
             ) {
                 if (state.selectedStrokeCount > 0) {
+                    var showLassoGeminiMenu by remember { mutableStateOf(false) }
                     Row(
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
@@ -1666,6 +1853,163 @@ fun ToolbarOverlay(
                             style = MaterialTheme.typography.labelSmall,
                             color = LeNoteTheme.colors.accentPrimary
                         )
+
+                        // Enviar Seleção para o Gemini (com Mini-Menu de Ações)
+                        Box {
+                            Surface(
+                                onClick = { showLassoGeminiMenu = true },
+                                shape = RoundedCornerShape(9.dp),
+                                color = LeNoteTheme.colors.accentPrimary.copy(alpha = 0.12f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    LeNoteTheme.colors.accentPrimary.copy(alpha = 0.35f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = PhosphorIcons.Fill.Sparkle,
+                                        contentDescription = s.lassoGeminiDesc,
+                                        tint = LeNoteTheme.colors.accentPrimary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = s.lassoGeminiLabel,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = LeNoteTheme.colors.accentPrimary
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = showLassoGeminiMenu,
+                                onDismissRequest = { showLassoGeminiMenu = false },
+                                containerColor = LeNoteTheme.colors.elevatedSurface
+                            ) {
+                                Text(
+                                    text = s.geminiMenuOverline,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = LeNoteTheme.colors.inkMuted,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = s.geminiActionExplainTitle,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = LeNoteTheme.colors.inkPrimary
+                                            )
+                                            Text(
+                                                text = s.geminiActionExplainSubtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LeNoteTheme.colors.inkSecondary
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.Sparkle,
+                                            contentDescription = null,
+                                            tint = LeNoteTheme.colors.accentPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showLassoGeminiMenu = false
+                                        onSendSelectionToGemini(GeminiPromptAction.EXPLAIN)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = s.geminiActionSolveTitle,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = LeNoteTheme.colors.inkPrimary
+                                            )
+                                            Text(
+                                                text = s.geminiActionSolveSubtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LeNoteTheme.colors.inkSecondary
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.CheckCircle,
+                                            contentDescription = null,
+                                            tint = LeNoteTheme.colors.accentPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showLassoGeminiMenu = false
+                                        onSendSelectionToGemini(GeminiPromptAction.SOLVE)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = s.geminiActionSummarizeTitle,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = LeNoteTheme.colors.inkPrimary
+                                            )
+                                            Text(
+                                                text = s.geminiActionSummarizeSubtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LeNoteTheme.colors.inkSecondary
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.ListDashes,
+                                            contentDescription = null,
+                                            tint = LeNoteTheme.colors.accentPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showLassoGeminiMenu = false
+                                        onSendSelectionToGemini(GeminiPromptAction.SUMMARIZE)
+                                    }
+                                )
+                                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = s.geminiActionFreeTitle,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                                color = LeNoteTheme.colors.inkPrimary
+                                            )
+                                            Text(
+                                                text = s.geminiActionFreeSubtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LeNoteTheme.colors.inkSecondary
+                                            )
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = PhosphorIcons.Regular.ArrowSquareOut,
+                                            contentDescription = null,
+                                            tint = LeNoteTheme.colors.inkSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        showLassoGeminiMenu = false
+                                        onSendSelectionToGemini(GeminiPromptAction.FREE)
+                                    }
+                                )
+                            }
+                        }
 
                         // Embelezar Caligrafia
                         IconButton(
@@ -2050,6 +2394,7 @@ private fun PageActionsDialog(
     onOpenSheetOptions: () -> Unit,
     onExportPdf: () -> Unit,
     onExportPng: () -> Unit,
+    onSendPageToGemini: () -> Unit,
     onDeletePage: () -> Unit,
     onPromptClear: () -> Unit,
     isDiagnosticsVisible: Boolean,
@@ -2182,6 +2527,13 @@ private fun PageActionsDialog(
                     subtitle = s.actionExportPngSubtitle,
                     onClick = onExportPng
                 )
+                PageActionRow(
+                    icon = PhosphorIcons.Fill.Sparkle,
+                    iconTint = LeNoteTheme.colors.accentPrimary,
+                    title = s.actionSendPageToGeminiTitle,
+                    subtitle = s.actionSendPageToGeminiSubtitle,
+                    onClick = onSendPageToGemini
+                )
 
                 if (com.example.lenote.BuildConfig.DEBUG) {
                     HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
@@ -2221,6 +2573,96 @@ private fun PageActionsDialog(
                     subtitle = s.actionMoveSheetToTrashSubtitle,
                     isDestructive = true,
                     onClick = onDeletePage
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Mini-menu editorial para escolher a ação ao enviar a página inteira para o app do Gemini.
+ */
+@Composable
+private fun GeminiActionPickerDialog(
+    title: String,
+    onSelectAction: (GeminiPromptAction) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val s = LeNoteTheme.strings
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier
+                .widthIn(max = 400.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = LeNoteTheme.colors.elevatedSurface,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, LeNoteTheme.colors.hairlineBorder)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = s.geminiMenuOverline,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LeNoteTheme.colors.accentPrimary
+                        )
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = LeNoteTheme.colors.inkPrimary
+                        )
+                    }
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = PhosphorIcons.Regular.X,
+                            contentDescription = s.actionClose,
+                            tint = LeNoteTheme.colors.inkSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+
+                PageActionRow(
+                    icon = PhosphorIcons.Regular.Sparkle,
+                    iconTint = LeNoteTheme.colors.accentPrimary,
+                    title = s.geminiActionExplainTitle,
+                    subtitle = s.geminiActionExplainSubtitle,
+                    onClick = { onSelectAction(GeminiPromptAction.EXPLAIN) }
+                )
+                PageActionRow(
+                    icon = PhosphorIcons.Regular.CheckCircle,
+                    iconTint = LeNoteTheme.colors.accentPrimary,
+                    title = s.geminiActionSolveTitle,
+                    subtitle = s.geminiActionSolveSubtitle,
+                    onClick = { onSelectAction(GeminiPromptAction.SOLVE) }
+                )
+                PageActionRow(
+                    icon = PhosphorIcons.Regular.ListDashes,
+                    iconTint = LeNoteTheme.colors.accentPrimary,
+                    title = s.geminiActionSummarizeTitle,
+                    subtitle = s.geminiActionSummarizeSubtitle,
+                    onClick = { onSelectAction(GeminiPromptAction.SUMMARIZE) }
+                )
+                HorizontalDivider(color = LeNoteTheme.colors.subtleDivider)
+                PageActionRow(
+                    icon = PhosphorIcons.Regular.ArrowSquareOut,
+                    title = s.geminiActionFreeTitle,
+                    subtitle = s.geminiActionFreeSubtitle,
+                    onClick = { onSelectAction(GeminiPromptAction.FREE) }
                 )
             }
         }

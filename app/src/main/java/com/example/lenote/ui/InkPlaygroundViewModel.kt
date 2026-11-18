@@ -21,7 +21,11 @@ import com.example.lenote.data.ToolbarDockEdge
 import com.example.lenote.data.WordBoxJsonSerializer
 import com.example.lenote.data.NotebookPackageExporter
 import com.example.lenote.export.ExportResult
+import com.example.lenote.export.GeminiPromptAction
+import com.example.lenote.export.GeminiShareHelper
+import com.example.lenote.export.GeminiShareOutcome
 import com.example.lenote.export.PageExporter
+import com.example.lenote.ui.i18n.LeNoteStrings
 import com.example.lenote.ink.DigitalInkManager
 import com.example.lenote.ink.InkingTool
 import com.example.lenote.ink.JetpackInkEngine
@@ -524,22 +528,29 @@ class InkPlaygroundViewModel : ViewModel() {
         _textBlocks.value = repo.getTextBlocks(curPage.id)
     }
 
-    fun addImageBlock(imageFile: File, worldX: Float = 100f, worldY: Float = 100f) {
-        val curPage = _currentPage.value ?: return
-        val repo = repository ?: return
+    fun addImageBlock(
+        imageFile: File,
+        worldX: Float = 100f,
+        worldY: Float = 100f,
+        width: Float = 300f,
+        height: Float = 300f
+    ): Boolean {
+        val curPage = _currentPage.value ?: return false
+        val repo = repository ?: return false
         val block = CanvasImageBlock(
             id = java.util.UUID.randomUUID().toString(),
             pageId = curPage.id,
             imagePath = imageFile.absolutePath,
             x = worldX,
             y = worldY,
-            width = 300f,
-            height = 300f,
+            width = width.coerceAtLeast(60f),
+            height = height.coerceAtLeast(60f),
             rotationDegrees = 0f,
             zIndex = (_imageBlocks.value.maxOfOrNull { it.zIndex } ?: 0f) + 1f
         )
         repo.upsertImageBlock(block)
         _imageBlocks.value = repo.getImageBlocks(curPage.id)
+        return true
     }
 
     fun updateImageBlock(block: CanvasImageBlock) {
@@ -985,6 +996,110 @@ class InkPlaygroundViewModel : ViewModel() {
 
     fun getThumbnailFile(pageId: String): File? {
         return repository?.strokeStorage?.getThumbnailFile(pageId)
+    }
+
+    // --- Compartilhamento com Gemini (Laço e Página Inteira) ---
+
+    fun shareSelectionToGemini(
+        activityContext: Context,
+        action: GeminiPromptAction,
+        strings: LeNoteStrings,
+        onComplete: ((GeminiShareOutcome) -> Unit)? = null
+    ) {
+        val selectedStrokes = engine.getSelectedStrokesSnapshot()
+        val bounds = engine.state.value.selectionBoundsWorld
+        if (selectedStrokes.isEmpty() || bounds == null) {
+            onComplete?.invoke(GeminiShareOutcome(isSuccess = false, errorMessage = strings.geminiShareErrorMessage))
+            return
+        }
+        val cur = _currentPage.value
+        val bg = engine.state.value.pageBackground
+        val paperColor = cur?.paperColor ?: 0xFFFFFFFF
+        val isDarkPaper = paperColor == 0xFF1E293B
+        val textBlocks = _textBlocks.value
+        val imageBlocks = _imageBlocks.value
+        val prompt = GeminiShareHelper.buildPrompt(action, strings, isFullPage = false)
+
+        viewModelScope.launch {
+            try {
+                val pngFile = withContext(Dispatchers.IO) {
+                    GeminiShareHelper.renderSelectionCropToPngFile(
+                        context = activityContext,
+                        bounds = bounds,
+                        selectedStrokes = selectedStrokes,
+                        background = bg,
+                        isDarkMode = isDarkPaper,
+                        paperColor = paperColor,
+                        pdfPath = cur?.pdfPath,
+                        pdfPageIndex = cur?.pdfPageIndex,
+                        textBlocks = textBlocks,
+                        imageBlocks = imageBlocks
+                    )
+                }
+                val outcome = GeminiShareHelper.shareImageToGemini(
+                    context = activityContext,
+                    imageFile = pngFile,
+                    prompt = prompt,
+                    chooserTitle = strings.geminiChooserTitle
+                )
+                onComplete?.invoke(outcome)
+            } catch (e: Exception) {
+                onComplete?.invoke(
+                    GeminiShareOutcome(
+                        isSuccess = false,
+                        errorMessage = e.message ?: strings.geminiShareErrorMessage
+                    )
+                )
+            }
+        }
+    }
+
+    fun shareCurrentPageToGemini(
+        activityContext: Context,
+        action: GeminiPromptAction,
+        strings: LeNoteStrings,
+        onComplete: ((GeminiShareOutcome) -> Unit)? = null
+    ) {
+        val cur = _currentPage.value
+        val bg = engine.state.value.pageBackground
+        val paperColor = cur?.paperColor ?: 0xFFFFFFFF
+        val isDarkPaper = paperColor == 0xFF1E293B
+        val strokes = engine.getFinishedStrokesSnapshot()
+        val textBlocks = _textBlocks.value
+        val imageBlocks = _imageBlocks.value
+        val prompt = GeminiShareHelper.buildPrompt(action, strings, isFullPage = true)
+
+        viewModelScope.launch {
+            try {
+                val pngFile = withContext(Dispatchers.IO) {
+                    GeminiShareHelper.renderFullPageToPngFile(
+                        context = activityContext,
+                        background = bg,
+                        strokes = strokes,
+                        isDarkMode = isDarkPaper,
+                        paperColor = paperColor,
+                        pdfPath = cur?.pdfPath,
+                        pdfPageIndex = cur?.pdfPageIndex,
+                        textBlocks = textBlocks,
+                        imageBlocks = imageBlocks
+                    )
+                }
+                val outcome = GeminiShareHelper.shareImageToGemini(
+                    context = activityContext,
+                    imageFile = pngFile,
+                    prompt = prompt,
+                    chooserTitle = strings.geminiChooserTitle
+                )
+                onComplete?.invoke(outcome)
+            } catch (e: Exception) {
+                onComplete?.invoke(
+                    GeminiShareOutcome(
+                        isSuccess = false,
+                        errorMessage = e.message ?: strings.geminiShareErrorMessage
+                    )
+                )
+            }
+        }
     }
 
     // --- Exportação PDF / PNG / Backup .lenote ---

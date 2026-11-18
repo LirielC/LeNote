@@ -225,7 +225,8 @@ object PageExporter {
         pdfPath: String? = null,
         pdfPageIndex: Int? = null,
         textBlocks: List<CanvasTextBlock> = emptyList(),
-        imageBlocks: List<CanvasImageBlock> = emptyList()
+        imageBlocks: List<CanvasImageBlock> = emptyList(),
+        customWorldViewport: FloatArray? = null
     ) {
         val paperBgColor = if (isDarkMode) {
             com.example.lenote.ink.ColorInversionHelper.getPaperBackgroundColor(true)
@@ -240,7 +241,7 @@ object PageExporter {
         }
         targetCanvas.drawRect(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat(), bgPaint)
 
-        val bounds = computePageWorldViewport(strokes)
+        val bounds = customWorldViewport ?: computePageWorldViewport(strokes)
         val worldLeft = bounds[0]
         val worldTop = bounds[1]
         val worldW = max(1f, bounds[2] - worldLeft)
