@@ -4,6 +4,8 @@ import com.example.lenote.data.AppPreferences
 import com.example.lenote.data.ThemeMode
 import com.example.lenote.data.ToolbarDockEdge
 import com.example.lenote.ink.ColorInversionHelper
+import com.example.lenote.ui.visibleImageOrigin
+import androidx.compose.ui.unit.IntSize
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -11,6 +13,21 @@ import org.junit.Test
 import java.nio.file.Files
 
 class UIAndErgonomicsUnitTest {
+
+    @Test
+    fun visibleImageOrigin_centersImageWithCurrentZoomAndPan() {
+        val origin = visibleImageOrigin(
+            viewportSize = IntSize(1000, 800),
+            zoom = 2f,
+            panX = 100f,
+            panY = -50f,
+            imageWidth = 360f,
+            imageHeight = 180f
+        )
+
+        assertEquals(20f, origin.x, 0.001f)
+        assertEquals(135f, origin.y, 0.001f)
+    }
 
     @Test
     fun colorInversionHelper_invertsBlackToLightGray() {

@@ -95,6 +95,7 @@ data class InkingState(
     val zoomLevel: Float = 1.0f,
     val panOffsetX: Float = 0f,
     val panOffsetY: Float = 0f,
+    val isNavigationLocked: Boolean = false,
     val contentVersion: Long = 0L,
     // Telemetria avançada para diagnóstico de Stylus, Palma e Dedo
     val lastActionName: String = "NONE",
@@ -117,6 +118,7 @@ interface InkingEngine {
     fun setPageBackground(background: PageBackground)
     fun setSmoothingLevel(level: SmoothingLevel)
     fun setTouchInkingEnabled(enabled: Boolean) {}
+    fun setNavigationLocked(locked: Boolean) {}
     fun setCameraTransform(zoom: Float, panX: Float, panY: Float)
     fun deleteSelectedStrokes()
     fun duplicateSelectedStrokes()

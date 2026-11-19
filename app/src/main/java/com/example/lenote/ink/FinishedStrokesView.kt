@@ -544,7 +544,14 @@ class FinishedStrokesView @JvmOverloads constructor(
             targetCanvas.drawRect(sLeft, sTop, sRight, sBottom, paperBackgroundPaint)
             targetCanvas.concat(worldToViewMatrix)
 
-            drawPageBackgroundInWorldSpace(targetCanvas, wLeft, wTop, wRight, wBottom)
+            val pdfBmp = pdfBackgroundBitmap
+            if (pdfBmp != null && !pdfBmp.isRecycled) {
+                val srcRect = android.graphics.Rect(0, 0, pdfBmp.width, pdfBmp.height)
+                val dstRect = RectF(0f, 0f, 1200f, 1600f)
+                targetCanvas.drawBitmap(pdfBmp, srcRect, dstRect, pdfPaint)
+            } else {
+                drawPageBackgroundInWorldSpace(targetCanvas, wLeft, wTop, wRight, wBottom)
+            }
 
             for (i in 0 until strokes.size) {
                 val stroke = strokes[i]

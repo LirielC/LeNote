@@ -654,6 +654,18 @@ class JetpackInkEngine : InkingEngine {
         _state.update { it.copy(isTouchInkingEnabled = enabled) }
     }
 
+    override fun setNavigationLocked(locked: Boolean) {
+        isTwoFingerPanZoomActive = false
+        isSingleFingerPanActive = false
+        isSingleFingerDragging = false
+        _state.update {
+            it.copy(
+                isNavigationLocked = locked,
+                gestureState = GestureInputState.IDLE
+            )
+        }
+    }
+
 
 
     override fun setCameraTransform(zoom: Float, panX: Float, panY: Float) {
@@ -671,6 +683,7 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun zoomIn() {
+        if (_state.value.isNavigationLocked) return
 
         val viewW = finishedStrokesView?.width?.toFloat() ?: inProgressStrokesView?.width?.toFloat() ?: 0f
 
@@ -703,6 +716,7 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun zoomOut() {
+        if (_state.value.isNavigationLocked) return
 
         val viewW = finishedStrokesView?.width?.toFloat() ?: inProgressStrokesView?.width?.toFloat() ?: 0f
 
@@ -735,6 +749,7 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun resetZoom() {
+        if (_state.value.isNavigationLocked) return
 
         val viewW = finishedStrokesView?.width?.toFloat() ?: inProgressStrokesView?.width?.toFloat() ?: 0f
 
@@ -767,6 +782,7 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun fitToPage() {
+        if (_state.value.isNavigationLocked) return
 
         val viewW = finishedStrokesView?.width?.toFloat() ?: inProgressStrokesView?.width?.toFloat() ?: 0f
 
@@ -1393,7 +1409,7 @@ class JetpackInkEngine : InkingEngine {
 
 
 
-        if (fingerCount >= 2) {
+        if (fingerCount >= 2 && !_state.value.isNavigationLocked) {
 
             isSingleFingerPanActive = false
 
@@ -1551,7 +1567,7 @@ class JetpackInkEngine : InkingEngine {
 
         // 4. Apenas 1 dedo (fingerCount == 1): Navegação fluida vertical/horizontal (FINGER = navegação, STYLUS = tinta)
 
-        if (fingerCount == 1 && fingerIdx0 in 0 until event.pointerCount) {
+        if (fingerCount == 1 && fingerIdx0 in 0 until event.pointerCount && !_state.value.isNavigationLocked) {
 
             val fx = event.getX(fingerIdx0)
 
@@ -4056,4 +4072,3 @@ class JetpackInkEngine : InkingEngine {
     }
 
 }
-

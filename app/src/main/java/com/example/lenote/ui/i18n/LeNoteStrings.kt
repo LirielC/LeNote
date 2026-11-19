@@ -273,6 +273,8 @@ data class LeNoteStrings(
     val zoomOutDesc: String,
     val zoomInDesc: String,
     val zoomFitToPageDesc: String,
+    val zoomLockPageDesc: String,
+    val zoomUnlockPageDesc: String,
     val zoomCloseDesc: String,
 
     // CollapsibleNavigationSidebar
@@ -532,6 +534,8 @@ val PtStrings = LeNoteStrings(
     zoomOutDesc = "Diminuir zoom",
     zoomInDesc = "Aumentar zoom",
     zoomFitToPageDesc = "Ajustar à página",
+    zoomLockPageDesc = "Travar posição da página",
+    zoomUnlockPageDesc = "Destravar posição da página",
     zoomCloseDesc = "Fechar controle de zoom",
 
     sidebarOverline = "ÍNDICE & SUMÁRIO",
@@ -827,6 +831,8 @@ val EnStrings = LeNoteStrings(
     zoomOutDesc = "Zoom out",
     zoomInDesc = "Zoom in",
     zoomFitToPageDesc = "Fit to page",
+    zoomLockPageDesc = "Lock page position",
+    zoomUnlockPageDesc = "Unlock page position",
     zoomCloseDesc = "Close zoom controls",
 
     sidebarOverline = "INDEX & CONTENTS",
@@ -1122,6 +1128,8 @@ val EsStrings = LeNoteStrings(
     zoomOutDesc = "Alejar zoom",
     zoomInDesc = "Acercar zoom",
     zoomFitToPageDesc = "Ajustar a la página",
+    zoomLockPageDesc = "Bloquear posición de la página",
+    zoomUnlockPageDesc = "Desbloquear posición de la página",
     zoomCloseDesc = "Cerrar control de zoom",
 
     sidebarOverline = "ÍNDICE Y SUMARIO",
