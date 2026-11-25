@@ -25,3 +25,7 @@ Tiles 256x256 ARGB_8888; cache inicial 32 MiB, até 64 MiB somente após mediç�
 
 ## Referências
 Consultar PERFORMANCE_ROADMAP.md para critérios detalhados e BENCHMARKS.md para evidência.
+
+
+## Extensão proposta: escrita inteligente
+Dois toggles independentes: caligrafia (natural, fonte manuscrita ou digitada) e matemática. Nenhum depende de laço. Jetpack Ink exibe tinta imediatamente; agrupador e detector de pausa alimentam reconhecimento fora do caminho crítico. ML Kit para texto; MathRecognitionEngine especializado para estrutura 2D. Validar revisão, página e qualidade antes da transformação atômica; preservar originais e Undo/Redo. Em escrita mista, matemática tem precedência apenas com classificação segura. Cachear fórmulas e preservar conteúdo sem resolver. Consultar SMART_HANDWRITING_ROADMAP.md e SMART_MATH_ROADMAP.md.
