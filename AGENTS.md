@@ -32,3 +32,7 @@ Antes de editar código, leia:
 
 ## Conclusão
 Só fechar tarefa quando critérios de aceitação e testes necessários tiverem evidência. Caso contrário, manter aberta e registrar o que falta.
+
+
+## Roadmaps de escrita inteligente
+Leia também [Smart Handwriting](docs/SMART_HANDWRITING_ROADMAP.md) e [Smart Math](docs/SMART_MATH_ROADMAP.md). Issues #14–#33 complementam #1–#12. Priorizar P0 e dependências antes das tarefas elegíveis P1/P2. Modos automáticos por toggle, sem laço; tinta imediata, reconhecimento assíncrono, revisão validada, originais recuperáveis após reabertura e Undo/Redo atômico. Desligar cancela trabalhos pendentes. Ambiguidades preservam tinta. Matemática apenas formata, não resolve nem corrige. Não adotar SDK pago nem transmitir notas sem autorização.
