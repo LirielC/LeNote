@@ -25,3 +25,7 @@ Metas não são resultados medidos nem garantias.
 
 ## Registro de execução
 Data, commit, aparelho/ROM, build, cenário, número de repetições, métricas P50/P95/P99, artefatos de trace, observações e limitações.
+
+
+## Escrita inteligente — métricas adicionais (a medir)
+Comparar toggles desligados/ligados no TB128FU. Corpus pt-BR com acentos, cursiva, letra de forma e escrita mista; medir CER/WER, tempo pausa→conversão P50/P95, taxa de fallback, alterações indevidas, jank e memória. Matemática: precisão de estrutura e símbolos contra AST/LaTeX de referência, sem resolver expressões. Testar reversão, troca de página, cancelamento e reabertura. Nenhum resultado registrado.
