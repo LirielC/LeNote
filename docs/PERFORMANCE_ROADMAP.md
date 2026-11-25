@@ -343,3 +343,9 @@ Este roadmap parte da análise estática anterior do repositório e das tarefas 
 | P2.1 | [#10 — Implementar suavização adaptativa](https://github.com/LirielC/LeNote/issues/10) | Pendente |
 | P2.2 | [#11 — Otimizar PDFs, OCR e miniaturas](https://github.com/LirielC/LeNote/issues/11) | Pendente |
 | P2.3 | [#12 — Realizar testes prolongados de memória](https://github.com/LirielC/LeNote/issues/12) | Pendente |
+
+
+## Roadmaps complementares
+- [Smart Handwriting](SMART_HANDWRITING_ROADMAP.md) — Issues #14–#23.
+- [Smart Math](SMART_MATH_ROADMAP.md) — Issues #24–#33.
+Priorizar P0 antes de habilitar transformação automática. Reconhecimento e renderização inteligente nunca devem bloquear a tinta ativa.
