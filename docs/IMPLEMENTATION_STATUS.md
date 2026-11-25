@@ -35,3 +35,30 @@ P0.1 orienta as decisões de desempenho; P0.2 precede a otimização de handoff 
 - Validação física pendente:
 - Riscos, regressões e bloqueios:
 - Próximo passo:
+
+
+## Escrita inteligente
+Todas as novas tarefas começam pendentes. Ver os dois roadmaps. Priorizar estabilidade P0, histórico/persistência atômicos (#22 e #33) antes de habilitar substituição automática, e avaliação do motor matemático (#27).
+
+| Issue | Estado |
+|---|---|
+| [#14](https://github.com/LirielC/LeNote/issues/14) | Pendente |
+| [#15](https://github.com/LirielC/LeNote/issues/15) | Pendente |
+| [#16](https://github.com/LirielC/LeNote/issues/16) | Pendente |
+| [#17](https://github.com/LirielC/LeNote/issues/17) | Pendente |
+| [#18](https://github.com/LirielC/LeNote/issues/18) | Pendente |
+| [#19](https://github.com/LirielC/LeNote/issues/19) | Pendente |
+| [#20](https://github.com/LirielC/LeNote/issues/20) | Pendente |
+| [#21](https://github.com/LirielC/LeNote/issues/21) | Pendente |
+| [#22](https://github.com/LirielC/LeNote/issues/22) | Pendente |
+| [#23](https://github.com/LirielC/LeNote/issues/23) | Pendente |
+| [#24](https://github.com/LirielC/LeNote/issues/24) | Pendente |
+| [#25](https://github.com/LirielC/LeNote/issues/25) | Pendente |
+| [#26](https://github.com/LirielC/LeNote/issues/26) | Pendente |
+| [#27](https://github.com/LirielC/LeNote/issues/27) | Pendente |
+| [#28](https://github.com/LirielC/LeNote/issues/28) | Pendente |
+| [#29](https://github.com/LirielC/LeNote/issues/29) | Pendente |
+| [#30](https://github.com/LirielC/LeNote/issues/30) | Pendente |
+| [#31](https://github.com/LirielC/LeNote/issues/31) | Pendente |
+| [#32](https://github.com/LirielC/LeNote/issues/32) | Pendente |
+| [#33](https://github.com/LirielC/LeNote/issues/33) | Pendente |
