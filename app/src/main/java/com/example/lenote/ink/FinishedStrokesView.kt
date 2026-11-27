@@ -288,13 +288,68 @@ class FinishedStrokesView @JvmOverloads constructor(
     }
 
     fun updateStrokes(newStrokes: List<Stroke>) {
+        if (strokes.size == newStrokes.size && strokes.indices.all { strokes[it] === newStrokes[it] }) return
+
+        val oldStrokeSet = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Stroke, Boolean>())
+        oldStrokeSet.addAll(strokes)
+        val newStrokeSet = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<Stroke, Boolean>())
+        newStrokeSet.addAll(newStrokes)
+        val changedStrokes = ArrayList<Stroke>()
+        changedStrokes.addAll(strokes.filter { it !in newStrokeSet })
+        changedStrokes.addAll(newStrokes.filter { it !in oldStrokeSet })
+
+        val remainingOld = strokes.filter { it in newStrokeSet }
+        val remainingNew = newStrokes.filter { it in oldStrokeSet }
+        val orderPreserved = remainingOld.size == remainingNew.size &&
+            remainingOld.indices.all { remainingOld[it] === remainingNew[it] }
+        val cacheCanvas = staticCacheCanvas
+        val cacheBitmap = staticCacheBitmap
+        val canPatch = changedStrokes.isNotEmpty() && orderPreserved &&
+            !staticCacheDirty && hiddenPreviewStrokes == null && cacheCanvas != null && cacheBitmap != null &&
+            cacheBitmap.width == width && cacheBitmap.height == height && !cacheBitmap.isRecycled
+
         hiddenPreviewStrokes = null
         cachedHiddenStrokes.clear()
         resetDirtyWorldRect()
         livePreviewChains.clear()
         strokes.clear()
         strokes.addAll(newStrokes)
-        staticCacheDirty = true
+
+        if (canPatch) {
+            for (stroke in changedStrokes) {
+                val bounds = PartialStrokeEraser.getOrComputeBounds(stroke)
+                if (bounds == null) {
+                    staticCacheDirty = true
+                    resetDirtyWorldRect()
+                    break
+                }
+                val pad = bounds.strokeHalfWidth + 6f
+                dirtyWorldMinX = min(dirtyWorldMinX, bounds.xMin - pad)
+                dirtyWorldMinY = min(dirtyWorldMinY, bounds.yMin - pad)
+                dirtyWorldMaxX = max(dirtyWorldMaxX, bounds.xMax + pad)
+                dirtyWorldMaxY = max(dirtyWorldMaxY, bounds.yMax + pad)
+                hasDirtyWorldRect = true
+            }
+        } else {
+            staticCacheDirty = true
+        }
+        invalidate()
+    }
+
+    /** Adds newly finished strokes without invalidating an otherwise valid static bitmap. */
+    fun appendStrokes(newStrokes: List<Stroke>) {
+        if (newStrokes.isEmpty()) return
+
+        strokes.addAll(newStrokes)
+        val cacheCanvas = staticCacheCanvas
+        val cacheBitmap = staticCacheBitmap
+        if (staticCacheDirty || cacheCanvas == null || cacheBitmap == null || hiddenPreviewStrokes != null) {
+            staticCacheDirty = true
+        } else {
+            for (stroke in newStrokes) {
+                renderer.draw(cacheCanvas, stroke, worldToViewMatrix)
+            }
+        }
         invalidate()
     }
 

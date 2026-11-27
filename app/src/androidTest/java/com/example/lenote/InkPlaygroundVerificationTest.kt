@@ -212,6 +212,12 @@ class InkPlaygroundVerificationTest {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
         Thread.sleep(300)
 
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val bitmap = android.graphics.Bitmap.createBitmap(1000, 1000, android.graphics.Bitmap.Config.ARGB_8888)
+            finishedView.draw(android.graphics.Canvas(bitmap))
+            bitmap.recycle()
+        }
+
         val colors = listOf(
             0xFF000000.toInt(),
             0xFF2196F3.toInt(),
@@ -221,6 +227,7 @@ class InkPlaygroundVerificationTest {
 
         val totalStrokes = 25
         for (i in 0 until totalStrokes) {
+            val rebuildsBeforeStroke = finishedView.staticCacheRebuildCount
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 if (i % 5 == 4) {
                     engine.setTool(InkingTool.Highlighter())
@@ -231,6 +238,12 @@ class InkPlaygroundVerificationTest {
             val y = 50f + i * 30f
             drawSyntheticStylusStroke(engine, inProgressView, 100f, y, 400f, y)
 
+            assertEquals(
+                "Finalizar um traço não deve reconstruir o cache estático globalmente",
+                rebuildsBeforeStroke,
+                finishedView.staticCacheRebuildCount
+            )
+
             assertEquals("Contagem de strokes após traço ${i + 1}", i + 1, engine.state.value.strokeCount)
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 assertTrue(
@@ -240,6 +253,8 @@ class InkPlaygroundVerificationTest {
             }
         }
 
+        val rebuildsBeforeUndo = finishedView.staticCacheRebuildCount
+        val patchesBeforeUndo = finishedView.staticCachePartialPatchCount
         for (remaining in (totalStrokes - 1) downTo 0) {
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 assertTrue(engine.state.value.canUndo)
@@ -247,6 +262,9 @@ class InkPlaygroundVerificationTest {
             }
             assertEquals("Contagem após Undo para $remaining", remaining, engine.state.value.strokeCount)
         }
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+        assertEquals("Undo local não deve reconstruir o cache inteiro", rebuildsBeforeUndo, finishedView.staticCacheRebuildCount)
+        assertTrue("Undo deve atualizar a região afetada", finishedView.staticCachePartialPatchCount > patchesBeforeUndo)
         assertFalse(engine.state.value.canUndo)
         assertTrue(engine.state.value.canRedo)
 

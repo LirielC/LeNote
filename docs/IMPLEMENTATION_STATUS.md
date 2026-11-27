@@ -5,7 +5,7 @@ Registro inicial: 24/11/2026. Planejamento criado; nenhuma implementação ou va
 | ID | Issue | Estado inicial |
 |---|---|---|
 | P0.1 | [#1 — Instrumentar o desempenho real no TB128FU](https://github.com/LirielC/LeNote/issues/1) | Pendente |
-| P0.2 | [#2 — Eliminar reconstrução completa do cache a cada traço](https://github.com/LirielC/LeNote/issues/2) | Pendente |
+| P0.2 | [#2 — Eliminar reconstrução completa do cache a cada traço](https://github.com/LirielC/LeNote/issues/2) | Implementado — aguardando validação |
 | P0.3 | [#3 — Remover serialização da thread principal](https://github.com/LirielC/LeNote/issues/3) | Pendente |
 | P0.4 | [#4 — Integrar MotionEventPredictor](https://github.com/LirielC/LeNote/issues/4) | Pendente |
 | P0.5 | [#5 — Otimizar onStrokesFinished](https://github.com/LirielC/LeNote/issues/5) | Pendente |
@@ -35,6 +35,14 @@ P0.1 orienta as decisões de desempenho; P0.2 precede a otimização de handoff 
 - Validação física pendente:
 - Riscos, regressões e bloqueios:
 - Próximo passo:
+
+## Execução — 26/11/2026 — P0.2 / Issue #2
+- Estado: Implementado — aguardando validação.
+- Alterações: `FinishedStrokesView.appendStrokes()` acrescenta novos traços ao bitmap estático válido; `updateStrokes()` atualiza somente a região alterada em inserções/remoções locais quando a ordem pode ser preservada. `JetpackInkEngine.onStrokesFinished()` usa o append e mantém fallback global para cache inválido, preview ativo, reordenação ou limites indisponíveis.
+- Testes: `:app:testDebugUnitTest` e `:app:assembleDebug` passaram. A regressão instrumentada `verify25Strokes_colorSwitching_highlighter_eraser_undoRedo_and_noDuplication` passou no Lenovo TB128FU (Android 12): 25 traços sem rebuild global e Undo com patch regional.
+- Evidências/limitações: validação automatizada executada no aparelho alvo. O teste não compara imagens de referência nem mede frame time/latência; BENCHMARKS.md não contém números de desempenho.
+- Riscos/pendências: validar equivalência visual com sobreposições/transparência de marca-texto e registrar benchmark antes/depois no TB128FU.
+- Próximo passo: comparação visual e medição de desempenho da P0.2.
 
 
 ## Escrita inteligente
