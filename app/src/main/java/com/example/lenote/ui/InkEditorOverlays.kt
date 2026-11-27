@@ -17,19 +17,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.os.Debug
 import com.example.lenote.export.GeminiPromptAction
 import com.example.lenote.ink.InkingState
 import com.example.lenote.ink.JetpackInkEngine
+import com.example.lenote.ink.InkPerformanceSnapshot
 import com.example.lenote.ui.theme.LeNoteTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @Composable
@@ -40,11 +46,38 @@ internal fun DiagnosticsOverlayStateHost(
     modifier: Modifier = Modifier
 ) {
     val state by engine.state.collectAsState()
+    var performance by remember(engine) { mutableStateOf(engine.performanceMonitor.snapshot()) }
+    var memoryStats by remember { mutableStateOf(readMemoryStats()) }
+    LaunchedEffect(engine) {
+        while (true) {
+            delay(500L)
+            performance = engine.performanceMonitor.snapshot()
+            memoryStats = readMemoryStats()
+        }
+    }
     DiagnosticsOverlay(
         state = state,
+        performance = performance,
+        memoryStats = memoryStats,
         saveStatus = saveStatus,
         onClose = onClose,
         modifier = modifier
+    )
+}
+
+private fun readMemoryStats(): String {
+    val runtime = Runtime.getRuntime()
+    val javaUsed = runtime.totalMemory() - runtime.freeMemory()
+    val gcCount = Debug.getRuntimeStat("art.gc.gc-count")?.toLongOrNull() ?: 0L
+    val gcTimeMs = Debug.getRuntimeStat("art.gc.gc-time")?.toLongOrNull() ?: 0L
+    val nativeUsed = Debug.getNativeHeapAllocatedSize()
+    return String.format(
+        Locale.US,
+        "Heap Java %.1f MiB | nativa %.1f MiB | GC %d / %d ms",
+        javaUsed / 1_048_576.0,
+        nativeUsed / 1_048_576.0,
+        gcCount,
+        gcTimeMs
     )
 }
 
@@ -128,6 +161,8 @@ internal fun ToolbarOverlayStateHost(
 @Composable
 fun DiagnosticsOverlay(
     state: InkingState,
+    performance: InkPerformanceSnapshot,
+    memoryStats: String,
     saveStatus: String?,
     onClose: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -191,17 +226,52 @@ fun DiagnosticsOverlay(
                 color = LeNoteTheme.colors.inkPrimary
             )
 
+            Text(
+                text = String.format(
+                    Locale.US,
+                    "Input %d | P50/P95/P99 %.2f/%.2f/%.2f ms | intervalo P50 %.2f ms | históricos %d",
+                    performance.inputSamples,
+                    performance.inputP50Millis,
+                    performance.inputP95Millis,
+                    performance.inputP99Millis,
+                    performance.eventIntervalP50Millis,
+                    performance.historicalSamples
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = LeNoteTheme.colors.inkSecondary
+            )
+            Text(
+                text = memoryStats,
+                style = MaterialTheme.typography.labelSmall,
+                color = LeNoteTheme.colors.inkSecondary
+            )
+            Text(
+                text = String.format(
+                    Locale.US,
+                    "Frames %d | P50/P95/P99 %.2f/%.2f/%.2f ms | >16,67 ms %d",
+                    performance.frameSamples,
+                    performance.frameP50Millis,
+                    performance.frameP95Millis,
+                    performance.frameP99Millis,
+                    performance.framesOverBudget
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = LeNoteTheme.colors.inkSecondary
+            )
+
             if (state.pointerDiagnostics.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 state.pointerDiagnostics.forEach { ptr ->
                     Text(
                         text = String.format(
                             Locale.US,
-                            "• [%d|%d] %s | P=%.2f | (%.0f, %.0f) -> %s",
+                            "• [%d|%d] %s | P=%.2f tilt=%.2f ori=%.2f | (%.0f, %.0f) -> %s",
                             ptr.pointerIndex,
                             ptr.pointerId,
                             ptr.toolTypeName,
                             ptr.pressure,
+                            ptr.tilt,
+                            ptr.orientation,
                             ptr.x,
                             ptr.y,
                             ptr.decision

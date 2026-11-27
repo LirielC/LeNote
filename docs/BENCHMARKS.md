@@ -29,3 +29,6 @@ Data, commit, aparelho/ROM, build, cenário, número de repetições, métricas 
 
 ## Escrita inteligente — métricas adicionais (a medir)
 Comparar toggles desligados/ligados no TB128FU. Corpus pt-BR com acentos, cursiva, letra de forma e escrita mista; medir CER/WER, tempo pausa→conversão P50/P95, taxa de fallback, alterações indevidas, jank e memória. Matemática: precisão de estrutura e símbolos contra AST/LaTeX de referência, sem resolver expressões. Testar reversão, troca de página, cancelamento e reabertura. Nenhum resultado registrado.
+
+## Instrumentação P0.1 — 26/11/2026
+Coletor adicionado com janela limitada de 512 amostras e percentis; overlay mostra valores coletados na sessão. Teste unitário valida retenção limitada e percentis. Build e teste passaram. Não há números de baseline: nenhum cenário foi executado no TB128FU. A coleta FrameMetrics ainda cobre a janela inteira do app e usa 16,67 ms como orçamento nominal; nenhum dado representa latência ponta-a-pixel.

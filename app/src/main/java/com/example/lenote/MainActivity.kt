@@ -1,5 +1,9 @@
 package com.example.lenote
 
+import android.os.Handler
+import android.os.Looper
+import android.view.FrameMetrics
+import android.view.Window
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -42,9 +46,16 @@ class MainActivity : ComponentActivity() {
     var navigateToDestination: ((AppDestination) -> Unit)? = null
         private set
 
+    private val frameMetricsListener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
+        playgroundViewModel.engine.performanceMonitor.recordFrame(
+            metrics.getMetric(FrameMetrics.TOTAL_DURATION)
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         playgroundViewModel.initializeIfNeeded(applicationContext)
+        window.addOnFrameMetricsAvailableListener(frameMetricsListener, Handler(Looper.getMainLooper()))
         enableEdgeToEdge()
         setContent {
             var currentScreen by rememberSaveable { mutableStateOf(AppDestination.HOME) }
@@ -108,5 +119,10 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         playgroundViewModel.flushCurrentPageSave()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        window.removeOnFrameMetricsAvailableListener(frameMetricsListener)
+        super.onDestroy()
     }
 }

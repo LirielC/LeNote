@@ -4,9 +4,9 @@ Registro inicial: 24/11/2026. Planejamento criado; nenhuma implementação ou va
 
 | ID | Issue | Estado inicial |
 |---|---|---|
-| P0.1 | [#1 — Instrumentar o desempenho real no TB128FU](https://github.com/LirielC/LeNote/issues/1) | Pendente |
+| P0.1 | [#1 — Instrumentar o desempenho real no TB128FU](https://github.com/LirielC/LeNote/issues/1) | Instrumentado — aguardando baseline físico |
 | P0.2 | [#2 — Eliminar reconstrução completa do cache a cada traço](https://github.com/LirielC/LeNote/issues/2) | Pendente |
-| P0.3 | [#3 — Remover serialização da thread principal](https://github.com/LirielC/LeNote/issues/3) | Pendente |
+| P0.3 | [#3 — Remover serialização da thread principal](https://github.com/LirielC/LeNote/issues/3) | Implementado na PR #34 — aguardando validação física |
 | P0.4 | [#4 — Integrar MotionEventPredictor](https://github.com/LirielC/LeNote/issues/4) | Pendente |
 | P0.5 | [#5 — Otimizar onStrokesFinished](https://github.com/LirielC/LeNote/issues/5) | Pendente |
 | P1.1 | [#6 — Implementar índice espacial](https://github.com/LirielC/LeNote/issues/6) | Pendente |
@@ -21,7 +21,7 @@ Registro inicial: 24/11/2026. Planejamento criado; nenhuma implementação ou va
 Pendente, em andamento, implementado — aguardando validação, bloqueado, concluído. Manter roadmap e Issues sincronizados. As linhas acima representam o estado inicial; atualizar durante execução.
 
 ## Próxima tarefa
-P0.1 — instrumentação e baseline. Se o tablet não estiver disponível, implementar instrumentação e testes automatizados, registrar a validação física pendente e só avançar em tarefas independentes.
+P0.1 — executar baseline reproduzível no TB128FU; instrumentação disponível, validação física pendente.
 
 ## Dependências
 P0.1 orienta as decisões de desempenho; P0.2 precede a otimização de handoff e tiles; P1.1 precede P1.2. P2.3 consolida a validação após as melhorias. Rever dependências se o código atual justificar.
@@ -62,3 +62,12 @@ Todas as novas tarefas começam pendentes. Ver os dois roadmaps. Priorizar estab
 | [#31](https://github.com/LirielC/LeNote/issues/31) | Pendente |
 | [#32](https://github.com/LirielC/LeNote/issues/32) | Pendente |
 | [#33](https://github.com/LirielC/LeNote/issues/33) | Pendente |
+
+## Execução — 26/11/2026 — P0.1 / Issue #1
+- Estado: Instrumentado — aguardando baseline físico.
+- Alterações: coletor com buffer circular limitado para latência/intervalo de input, amostras históricas e frame time P50/P95/P99; overlay atualiza a cada 500 ms, sem recomposição por amostra. `FrameMetrics` observa duração total dos frames; `android.os.Trace` marca input, finalização, serialização e rebuild/patch do cache. Diagnósticos de ponteiro incluem pressão, inclinação e orientação.
+- Testes: `:app:testDebugUnitTest` — passou (44 tarefas); `:app:assembleDebug` — passou; teste do coletor verifica percentis, limite de amostras e contagem de frames acima do orçamento.
+- Métricas antes/depois: não medidas.
+- Validação física pendente: baseline TB128FU para escrita, borracha, zoom e autosave nas quatro densidades da Issue; Perfetto/profiler, memória/GC e ponta-a-pixel ainda requerem execução física/ferramentas externas.
+- Riscos/limitações: orçamento de 16,67 ms é apenas referência nominal; FrameMetrics coleta a janela do app, não mede ponta-a-pixel e inclui telas fora do canvas. A aceitação da Issue ainda não foi cumprida.
+- Próximo passo: executar e registrar medições no aparelho antes de concluir.

@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.RectF
 
 import android.util.Log
+import android.os.Trace
 import android.view.MotionEvent
 
 import android.view.ScaleGestureDetector
@@ -124,6 +125,9 @@ data class EraserProfilingStats(
 
 
 class JetpackInkEngine : InkingEngine {
+
+    val performanceMonitor = InkPerformanceMonitor()
+    private var lastInputEventTimeMs = 0L
 
 
 
@@ -358,8 +362,9 @@ class JetpackInkEngine : InkingEngine {
     private val strokesFinishedListener = object : InProgressStrokesFinishedListener {
 
         override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
-
-            if (strokes.isEmpty()) return
+            Trace.beginSection("LeNote#strokesFinished")
+            try {
+                if (strokes.isEmpty()) return
 
 
 
@@ -432,7 +437,9 @@ class JetpackInkEngine : InkingEngine {
             contentVersionCounter++
 
             syncStateAndRender()
-
+            } finally {
+                Trace.endSection()
+            }
         }
 
     }
@@ -1237,9 +1244,25 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        val startNanos = System.nanoTime()
+        val intervalMillis = if (lastInputEventTimeMs == 0L) 0L else event.eventTime - lastInputEventTimeMs
+        lastInputEventTimeMs = event.eventTime
+        Trace.beginSection("LeNote#input")
+        return try {
+            processTouchEvent(event)
+        } finally {
+            Trace.endSection()
+            performanceMonitor.recordInput(
+                durationNanos = System.nanoTime() - startNanos,
+                intervalMillis = intervalMillis,
+                historicalSampleCount = event.historySize * event.pointerCount
+            )
+        }
+    }
+
+    private fun processTouchEvent(event: MotionEvent): Boolean {
         val actionMasked = event.actionMasked
         val pointer0ToolType = if (event.pointerCount > 0) event.getToolType(0) else MotionEvent.TOOL_TYPE_UNKNOWN
-        android.util.Log.d("LeNoteInking", "onTouchEvent: action=$actionMasked, toolType=$pointer0ToolType, activeTool=${_state.value.currentTool}")
 
         val actionIndex = event.actionIndex
 
@@ -3209,6 +3232,10 @@ class JetpackInkEngine : InkingEngine {
 
                     pressure = event.getPressure(i),
 
+                    tilt = event.getAxisValue(MotionEvent.AXIS_TILT, i),
+
+                    orientation = event.getOrientation(i),
+
                     decision = decision
 
                 )
@@ -3912,7 +3939,8 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun saveStrokes(): ByteArray {
-
+        Trace.beginSection("LeNote#serializeStrokes")
+        try {
         val byteOut = ByteArrayOutputStream()
 
         val dataOut = DataOutputStream(byteOut)
@@ -3958,7 +3986,9 @@ class JetpackInkEngine : InkingEngine {
         dataOut.flush()
 
         return byteOut.toByteArray()
-
+        } finally {
+            Trace.endSection()
+        }
     }
 
 

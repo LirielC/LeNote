@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Trace
 import android.util.AttributeSet
 import android.view.View
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
@@ -596,22 +597,32 @@ class FinishedStrokesView @JvmOverloads constructor(
             }
 
             if (staticCacheDirty && bmpCanvas != null) {
-                renderStaticLayerToCanvas(bmpCanvas, viewW, viewH)
+                Trace.beginSection("LeNote#cacheRebuild")
+                try {
+                    renderStaticLayerToCanvas(bmpCanvas, viewW, viewH)
+                } finally {
+                    Trace.endSection()
+                }
                 cachedHiddenStrokes.clear()
                 hiddenPreviewStrokes?.let { cachedHiddenStrokes.addAll(it) }
                 resetDirtyWorldRect()
                 staticCacheDirty = false
                 staticCacheRebuildCount++
             } else if (hasDirtyWorldRect && bmpCanvas != null) {
-                patchStaticLayerDirtyWorldRect(
-                    bmpCanvas,
-                    viewW,
-                    viewH,
-                    dirtyWorldMinX,
-                    dirtyWorldMinY,
-                    dirtyWorldMaxX,
-                    dirtyWorldMaxY
-                )
+                Trace.beginSection("LeNote#cachePatch")
+                try {
+                    patchStaticLayerDirtyWorldRect(
+                        bmpCanvas,
+                        viewW,
+                        viewH,
+                        dirtyWorldMinX,
+                        dirtyWorldMinY,
+                        dirtyWorldMaxX,
+                        dirtyWorldMaxY
+                    )
+                } finally {
+                    Trace.endSection()
+                }
                 resetDirtyWorldRect()
                 staticCachePartialPatchCount++
                 fastBitmapBlitFrameCount++

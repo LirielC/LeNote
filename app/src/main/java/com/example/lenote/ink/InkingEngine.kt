@@ -50,6 +50,8 @@ data class PointerTelemetry(
     val x: Float,
     val y: Float,
     val pressure: Float,
+    val tilt: Float,
+    val orientation: Float,
     val decision: String
 )
 

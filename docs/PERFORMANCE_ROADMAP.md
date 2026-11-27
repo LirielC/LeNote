@@ -28,9 +28,9 @@ A frequência efetiva de amostragem, os eixos disponíveis, o comportamento do f
 
 ### P0 — Crítico: latência e travamentos
 
-- [ ] Instrumentar o desempenho real no TB128FU.
+- [ ] Instrumentar o desempenho real no TB128FU (instrumentação implementada; baseline físico pendente).
 - [ ] Eliminar reconstrução completa do cache a cada traço.
-- [ ] Remover serialização da thread principal.
+- [ ] Remover serialização da thread principal (implementado na PR #34; aguardando validação física).
 - [ ] Integrar MotionEventPredictor.
 - [ ] Otimizar onStrokesFinished.
 
