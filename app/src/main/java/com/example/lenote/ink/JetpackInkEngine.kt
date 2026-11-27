@@ -375,6 +375,8 @@ class JetpackInkEngine : InkingEngine {
 
             val currentSmoothing = _state.value.smoothingLevel
 
+            val newlyFinishedStrokes = ArrayList<Stroke>(strokes.size)
+
             for ((_, rawStroke) in strokes) {
 
                 var strokeToInsert = StrokeSmoother.smoothStroke(rawStroke, currentSmoothing)
@@ -413,6 +415,8 @@ class JetpackInkEngine : InkingEngine {
 
                 finishedStrokes.add(strokeToInsert)
 
+                newlyFinishedStrokes.add(strokeToInsert)
+
                 if (!wasSnapped) {
 
                     undoStack.add(InkHistoryOperation.AddStroke(strokeToInsert))
@@ -431,7 +435,11 @@ class JetpackInkEngine : InkingEngine {
 
             contentVersionCounter++
 
-            syncStateAndRender()
+            syncState()
+
+            finishedStrokesView?.appendStrokes(newlyFinishedStrokes)
+
+            finishedStrokesView?.updateLassoOverlay(lassoPolygonWorldPoints, currentSelectionBoundsWorld)
 
         }
 
@@ -3885,6 +3893,18 @@ class JetpackInkEngine : InkingEngine {
 
     private fun syncStateAndRender() {
 
+        syncState()
+
+        finishedStrokesView?.updateStrokes(finishedStrokes)
+
+        finishedStrokesView?.updateLassoOverlay(lassoPolygonWorldPoints, currentSelectionBoundsWorld)
+
+    }
+
+
+
+    private fun syncState() {
+
         _state.update {
 
             it.copy(
@@ -3902,10 +3922,6 @@ class JetpackInkEngine : InkingEngine {
             )
 
         }
-
-        finishedStrokesView?.updateStrokes(finishedStrokes)
-
-        finishedStrokesView?.updateLassoOverlay(lassoPolygonWorldPoints, currentSelectionBoundsWorld)
 
     }
 
