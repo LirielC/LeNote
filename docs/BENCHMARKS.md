@@ -29,3 +29,6 @@ Data, commit, aparelho/ROM, build, cenário, número de repetições, métricas 
 
 ## Escrita inteligente — métricas adicionais (a medir)
 Comparar toggles desligados/ligados no TB128FU. Corpus pt-BR com acentos, cursiva, letra de forma e escrita mista; medir CER/WER, tempo pausa→conversão P50/P95, taxa de fallback, alterações indevidas, jank e memória. Matemática: precisão de estrutura e símbolos contra AST/LaTeX de referência, sem resolver expressões. Testar reversão, troca de página, cancelamento e reabertura. Nenhum resultado registrado.
+
+## Execução P0.3 — 26/11/2026
+Build `:app:assembleDebug` e testes unitários `:app:testDebugUnitTest` passaram. Não houve medição de tempo de serialização, frame time ou teste físico; portanto, a tabela de métricas permanece sem resultados. A validação de durabilidade no TB128FU está pendente.

@@ -125,6 +125,13 @@ data class EraserProfilingStats(
 
 class JetpackInkEngine : InkingEngine {
 
+    data class StrokeSaveEntry(
+        val isHighlighter: Boolean,
+        val colorIntArgb: Int,
+        val size: Float,
+        val inputs: ImmutableStrokeInputBatch
+    )
+
 
 
     private val _state = MutableStateFlow(InkingState())
@@ -3911,57 +3918,39 @@ class JetpackInkEngine : InkingEngine {
 
 
 
-    override fun saveStrokes(): ByteArray {
+    override fun saveStrokes(): ByteArray = serializeStrokeSnapshot(captureStrokeSnapshot())
 
-        val byteOut = ByteArrayOutputStream()
-
-        val dataOut = DataOutputStream(byteOut)
-
-
-
-        dataOut.writeInt(finishedStrokes.size)
-
-
-
-        for (stroke in finishedStrokes) {
-
-            val brush = stroke.brush
-
-            val isHighlighter = brush.family == highlighterBrushFamily
-
-            dataOut.writeBoolean(isHighlighter)
-
-            dataOut.writeInt(brush.colorIntArgb)
-
-            dataOut.writeFloat(brush.size)
-
-
-
-            val inputBatch = stroke.inputs
-
-            val batchBytesStream = ByteArrayOutputStream()
-
-            StrokeInputBatchSerialization.encode(inputBatch, batchBytesStream)
-
-            val batchBytes = batchBytesStream.toByteArray()
-
-
-
-            dataOut.writeInt(batchBytes.size)
-
-            dataOut.write(batchBytes)
-
-        }
-
-
-
-        dataOut.flush()
-
-        return byteOut.toByteArray()
-
+    /** Captures immutable Ink input batches and primitive brush metadata on the engine thread. */
+    fun captureStrokeSnapshot(): List<StrokeSaveEntry> = finishedStrokes.map { stroke ->
+        StrokeSaveEntry(
+            isHighlighter = stroke.brush.family == highlighterBrushFamily,
+            colorIntArgb = stroke.brush.colorIntArgb,
+            size = stroke.brush.size,
+            inputs = stroke.inputs
+        )
     }
 
+    /** Serializes a detached snapshot; callers may run this CPU work on Dispatchers.Default. */
+    fun serializeStrokeSnapshot(snapshot: List<StrokeSaveEntry>): ByteArray {
+        val byteOut = ByteArrayOutputStream()
+        val dataOut = DataOutputStream(byteOut)
+        dataOut.writeInt(snapshot.size)
 
+        for (stroke in snapshot) {
+            dataOut.writeBoolean(stroke.isHighlighter)
+            dataOut.writeInt(stroke.colorIntArgb)
+            dataOut.writeFloat(stroke.size)
+
+            val batchBytesStream = ByteArrayOutputStream()
+            StrokeInputBatchSerialization.encode(stroke.inputs, batchBytesStream)
+            val batchBytes = batchBytesStream.toByteArray()
+            dataOut.writeInt(batchBytes.size)
+            dataOut.write(batchBytes)
+        }
+
+        dataOut.flush()
+        return byteOut.toByteArray()
+    }
 
     override fun loadStrokes(data: ByteArray) {
 

@@ -31,8 +31,13 @@ import com.example.lenote.ink.InkingTool
 import com.example.lenote.ink.JetpackInkEngine
 import com.example.lenote.ink.PenStrokeSize
 import com.example.lenote.ink.PageBackground
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,6 +48,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * ViewModel responsável por manter:
@@ -157,6 +163,9 @@ class InkPlaygroundViewModel : ViewModel() {
     private var searchObserverJob: Job? = null
     private var autoSaveDebounceJob: Job? = null
     private var suppressAutoSaveUntilContentVersion: Long = -1L
+    private val pageSaveVersions = ConcurrentHashMap<String, Long>()
+    private val pageSaveScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val pageSaveMutex = Mutex()
 
     fun initializeIfNeeded(context: Context) {
         if (isInitialized) return
@@ -373,74 +382,94 @@ class InkPlaygroundViewModel : ViewModel() {
         }
     }
 
-    private suspend fun persistCurrentPageAsync() {
-        val repo = repository ?: run {
-            _isSaving.value = false
-            return
-        }
-        val page = _currentPage.value ?: run {
-            _isSaving.value = false
-            return
-        }
-        val engineState = engine.state.value
-        val strokesSnapshot = engine.getFinishedStrokesSnapshot()
-        val strokeBytes = engine.saveStrokes()
+    private data class PageSaveSnapshot(
+        val page: PageEntity,
+        val state: com.example.lenote.ink.InkingState,
+        val inkSnapshot: List<JetpackInkEngine.StrokeSaveEntry>,
+        val renderSnapshot: List<androidx.ink.strokes.Stroke>,
+        val version: Long
+    )
 
-        withContext(Dispatchers.IO) {
-            val thumbBmp = runCatching {
-                PageExporter.generateThumbnailBitmap(engineState.pageBackground, strokesSnapshot)
-            }.getOrNull()
-
-            repo.savePageContent(
-                pageId = page.id,
-                strokesBytes = strokeBytes,
-                pageBackground = engineState.pageBackground,
-                zoom = engineState.zoomLevel,
-                panX = engineState.panOffsetX,
-                panY = engineState.panOffsetY,
-                thumbnailBitmap = thumbBmp,
-                paperColor = page.paperColor
-            )
-            thumbBmp?.recycle()
-        }
-
-        _savedStrokesData.value = strokeBytes
-        _thumbnailVersion.value++
-        _isSaving.value = false
-        _saveStatusMessage.value = "Salvo"
+    private fun captureCurrentPageSave(): PageSaveSnapshot? {
+        val page = _currentPage.value ?: return null
+        val version = (pageSaveVersions[page.id] ?: 0L) + 1L
+        pageSaveVersions[page.id] = version
+        return PageSaveSnapshot(
+            page = page,
+            state = engine.state.value,
+            inkSnapshot = engine.captureStrokeSnapshot(),
+            renderSnapshot = engine.getFinishedStrokesSnapshot(),
+            version = version
+        )
     }
 
-    /**
-     * Força a gravação síncrona/imediata da página atual (chamada antes de trocar de página ou sair).
-     */
+    private suspend fun persistCurrentPageAsync() {
+        val snapshot = captureCurrentPageSave()
+        if (snapshot == null || repository == null) {
+            _isSaving.value = false
+            return
+        }
+        persistPageSave(snapshot)
+    }
+
+    private fun enqueueCurrentPageSave() {
+        val snapshot = captureCurrentPageSave() ?: return
+        if (repository == null) return
+        _isSaving.value = true
+        pageSaveScope.launch { persistPageSave(snapshot) }
+    }
+
+    private suspend fun persistPageSave(snapshot: PageSaveSnapshot) {
+        val repo = repository ?: return
+        var thumbBmp: android.graphics.Bitmap? = null
+        try {
+            val strokeBytes = withContext(Dispatchers.Default) {
+                engine.serializeStrokeSnapshot(snapshot.inkSnapshot)
+            }
+            thumbBmp = withContext(Dispatchers.Default) {
+                runCatching {
+                    PageExporter.generateThumbnailBitmap(snapshot.state.pageBackground, snapshot.renderSnapshot)
+                }.getOrNull()
+            }
+            pageSaveMutex.withLock {
+                withContext(Dispatchers.IO) {
+                    if (pageSaveVersions[snapshot.page.id] == snapshot.version) {
+                        repo.savePageContent(
+                            pageId = snapshot.page.id,
+                            strokesBytes = strokeBytes,
+                            pageBackground = snapshot.state.pageBackground,
+                            zoom = snapshot.state.zoomLevel,
+                            panX = snapshot.state.panOffsetX,
+                            panY = snapshot.state.panOffsetY,
+                            thumbnailBitmap = thumbBmp,
+                            paperColor = snapshot.page.paperColor
+                        )
+                    }
+                }
+            }
+            if (pageSaveVersions[snapshot.page.id] == snapshot.version) {
+                _savedStrokesData.value = strokeBytes
+                _thumbnailVersion.value++
+                _isSaving.value = false
+                _saveStatusMessage.value = "Salvo"
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            if (pageSaveVersions[snapshot.page.id] == snapshot.version) {
+                _isSaving.value = false
+                _saveStatusMessage.value = "Falha ao salvar página"
+            }
+        } finally {
+            thumbBmp?.recycle()
+        }
+    }
+
+    /** Captures state on the engine thread, then serializes and writes without blocking the UI. */
     fun flushCurrentPageSave() {
         autoSaveDebounceJob?.cancel()
         autoSaveDebounceJob = null
-        val repo = repository ?: return
-        val page = _currentPage.value ?: return
-        val engineState = engine.state.value
-        val strokesSnapshot = engine.getFinishedStrokesSnapshot()
-        val strokeBytes = engine.saveStrokes()
-
-        val thumbBmp = runCatching {
-            PageExporter.generateThumbnailBitmap(engineState.pageBackground, strokesSnapshot)
-        }.getOrNull()
-
-        repo.savePageContent(
-            pageId = page.id,
-            strokesBytes = strokeBytes,
-            pageBackground = engineState.pageBackground,
-            zoom = engineState.zoomLevel,
-            panX = engineState.panOffsetX,
-            panY = engineState.panOffsetY,
-            thumbnailBitmap = thumbBmp
-        )
-        thumbBmp?.recycle()
-
-        _savedStrokesData.value = strokeBytes
-        _thumbnailVersion.value++
-        _isSaving.value = false
-        _saveStatusMessage.value = "Salvo"
+        enqueueCurrentPageSave()
     }
 
     // --- Navegação e Operações de Caderno / Seção / Página ---
@@ -1312,11 +1341,8 @@ class InkPlaygroundViewModel : ViewModel() {
     // --- Compatibilidade com botões manuais Salvar/Carregar e testes existentes ---
 
     fun saveCurrentStrokes() {
-        val bytes = engine.saveStrokes()
-        _savedStrokesData.value = bytes
         flushCurrentPageSave()
-        val count = engine.state.value.strokeCount
-        _saveStatusMessage.value = "Salvo: ${bytes.size} bytes ($count traços)"
+        _saveStatusMessage.value = "Salvando... (${engine.state.value.strokeCount} traços)"
     }
 
     fun loadSavedStrokes() {
