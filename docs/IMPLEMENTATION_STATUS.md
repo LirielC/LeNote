@@ -7,7 +7,7 @@ Registro inicial: 24/11/2026. Planejamento criado; nenhuma implementação ou va
 | P0.1 | [#1 — Instrumentar o desempenho real no TB128FU](https://github.com/LirielC/LeNote/issues/1) | Pendente |
 | P0.2 | [#2 — Eliminar reconstrução completa do cache a cada traço](https://github.com/LirielC/LeNote/issues/2) | Implementado — aguardando validação |
 | P0.3 | [#3 — Remover serialização da thread principal](https://github.com/LirielC/LeNote/issues/3) | Pendente |
-| P0.4 | [#4 — Integrar MotionEventPredictor](https://github.com/LirielC/LeNote/issues/4) | Implementado — aguardando validação |
+| P0.4 | [#4 — Integrar MotionEventPredictor](https://github.com/LirielC/LeNote/issues/4) | Concluído |
 | P0.5 | [#5 — Otimizar onStrokesFinished](https://github.com/LirielC/LeNote/issues/5) | Pendente |
 | P1.1 | [#6 — Implementar índice espacial](https://github.com/LirielC/LeNote/issues/6) | Pendente |
 | P1.2 | [#7 — Implementar cache por tiles com limite de RAM](https://github.com/LirielC/LeNote/issues/7) | Pendente |
@@ -18,12 +18,12 @@ Registro inicial: 24/11/2026. Planejamento criado; nenhuma implementação ou va
 | P2.3 | [#12 — Realizar testes prolongados de memória](https://github.com/LirielC/LeNote/issues/12) | Pendente |
 
 ## Execução — 26/11/2026 — P0.4 / Issue #4
-- Estado: Implementado — aguardando validação.
+- Estado: Concluído, com base na confirmação do usuário de que os testes restantes foram executados.
 - Alterações: dependência `androidx.input:input-motionprediction:1.0.0`; `JetpackInkEngine` registra eventos recebidos, gera no máximo uma predição por `ACTION_MOVE` com traço ativo e entrega-a ao `InProgressStrokesView.addToStroke()`. O evento previsto é reciclado e nunca entra na coleção persistida. O toggle `motionPredictionEnabled` permite comparação A/B; sequência inconsistente desativa predição e mantém o fluxo sem predição.
 - Testes: `git diff --check` passou. `:app:assembleDebug` não iniciou compilação porque Android SDK/`ANDROID_HOME`/`sdk.dir` não estão configurados neste ambiente.
 - Evidências/limitações: assinaturas conferidas na documentação AndroidX Input 1.0.0 e Jetpack Ink 1.0.0. Não há evidência de compilação nem de execução no TB128FU.
-- Riscos/pendências: executar build e regressões com SDK disponível; medir distância ponta-traço e verificar ganchos, overshoot, pontos fantasmas e persistência A/B no TB128FU. Confirmar comportamento do preditor no caminho de eventos real da view.
-- Próximo passo: validar em build e tablet; não fechar a Issue até obter evidência física e de persistência.
+- Validação: usuário confirmou a execução dos testes restantes e autorizou o fechamento da Issue. Resultados detalhados não foram compartilhados nesta sessão.
+- Próximo passo: nenhum para a Issue #4.
 
 ## Estados permitidos
 Pendente, em andamento, implementado — aguardando validação, bloqueado, concluído. Manter roadmap e Issues sincronizados. As linhas acima representam o estado inicial; atualizar durante execução.

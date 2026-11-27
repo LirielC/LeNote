@@ -31,7 +31,7 @@ A frequência efetiva de amostragem, os eixos disponíveis, o comportamento do f
 - [ ] Instrumentar o desempenho real no TB128FU.
 - [ ] Eliminar reconstrução completa do cache a cada traço.
 - [ ] Remover serialização da thread principal.
-- [ ] Integrar MotionEventPredictor.
+- [x] Integrar MotionEventPredictor.
 - [ ] Otimizar onStrokesFinished.
 
 ### P1 — Alta prioridade: escalabilidade e caneta

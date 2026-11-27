@@ -28,7 +28,7 @@ Data, commit, aparelho/ROM, build, cenário, número de repetições, métricas 
 
 26/11/2026 — Issue #2: nenhuma medição de desempenho registrada. `:app:testDebugUnitTest` e `:app:assembleDebug` passaram; a regressão instrumentada para append sem rebuild e Undo regional passou no Lenovo TB128FU (Android 12). O teste confirma contadores de rebuild/patch, mas não mede frame time, latência ou equivalência visual; esses resultados continuam pendentes.
 
-26/11/2026 — Issue #4: nenhuma medição A/B registrada. A compilação `:app:assembleDebug` foi bloqueada antes da compilação por ausência do Android SDK configurado neste ambiente. Distância ponta-traço, frame time, artefatos visuais e persistência com predição ligada/desligada aguardam validação no TB128FU.
+26/11/2026 — Issue #4: usuário confirmou que os testes restantes foram executados e autorizou o fechamento da Issue. Nenhuma medição numérica A/B foi compartilhada nesta sessão; a tentativa local de `:app:assembleDebug` não iniciou por ausência do Android SDK configurado.
 
 
 ## Escrita inteligente — métricas adicionais (a medir)
