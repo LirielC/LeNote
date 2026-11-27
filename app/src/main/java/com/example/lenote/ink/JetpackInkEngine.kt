@@ -34,6 +34,7 @@ import androidx.ink.geometry.ImmutableVec
 import androidx.ink.geometry.Intersection
 
 import androidx.ink.storage.StrokeInputBatchSerialization
+import androidx.input.motionprediction.MotionEventPredictor
 
 import androidx.ink.strokes.ImmutableStrokeInputBatch
 
@@ -134,6 +135,13 @@ class JetpackInkEngine : InkingEngine {
 
 
     private var inProgressStrokesView: InProgressStrokesView? = null
+
+    private var motionEventPredictor: MotionEventPredictor? = null
+
+    private var motionPredictionInputValid = true
+
+    /** Toggle temporário para comparação A/B em diagnóstico. */
+    var motionPredictionEnabled: Boolean = true
 
     private var finishedStrokesView: FinishedStrokesView? = null
 
@@ -449,6 +457,10 @@ class JetpackInkEngine : InkingEngine {
 
     override fun attachView(view: View) {
 
+        motionEventPredictor = MotionEventPredictor.newInstance(view)
+
+        motionPredictionInputValid = true
+
         if (view is InProgressStrokesView) {
 
             view.removeFinishedStrokesListener(strokesFinishedListener)
@@ -496,6 +508,10 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun detachView() {
+
+        motionEventPredictor = null
+
+        motionPredictionInputValid = true
 
         inProgressStrokesView?.removeFinishedStrokesListener(strokesFinishedListener)
 
@@ -1245,6 +1261,16 @@ class JetpackInkEngine : InkingEngine {
 
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+
+        if (motionPredictionInputValid) {
+            try {
+                motionEventPredictor?.record(event)
+            } catch (exception: IllegalArgumentException) {
+                motionPredictionInputValid = false
+                android.util.Log.w("LeNoteInking", "MotionEventPredictor recebeu sequência inconsistente; usando fallback sem predição", exception)
+            }
+        }
+
         val actionMasked = event.actionMasked
         val pointer0ToolType = if (event.pointerCount > 0) event.getToolType(0) else MotionEvent.TOOL_TYPE_UNKNOWN
         android.util.Log.d("LeNoteInking", "onTouchEvent: action=$actionMasked, toolType=$pointer0ToolType, activeTool=${_state.value.currentTool}")
@@ -2154,7 +2180,14 @@ class JetpackInkEngine : InkingEngine {
 
             MotionEvent.ACTION_MOVE -> {
 
-                for (i in 0 until event.pointerCount) {
+                val prediction = if (motionPredictionEnabled && activeStrokeIds.isNotEmpty() && motionPredictionInputValid) {
+                    motionEventPredictor?.predict()
+                } else {
+                    null
+                }
+
+                try {
+                    for (i in 0 until event.pointerCount) {
 
                     val pId = event.getPointerId(i)
 
@@ -2164,7 +2197,7 @@ class JetpackInkEngine : InkingEngine {
 
                     if (strokeId != null && strokeView != null) {
 
-                        strokeView.addToStroke(event, pId, strokeId)
+                        strokeView.addToStroke(event, pId, strokeId, prediction)
 
                         val rawSx = event.getX(i)
 
@@ -2361,6 +2394,9 @@ class JetpackInkEngine : InkingEngine {
 
                     }
 
+                    }
+                } finally {
+                    prediction?.recycle()
                 }
 
 

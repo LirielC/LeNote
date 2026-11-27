@@ -12,6 +12,7 @@ kotlin = "2.1.20"
 composeBom = "2026.03.01"
 activityCompose = "1.13.0"
 ink = "1.0.0"
+inputMotionPrediction = "1.0.0"
 mlkitDigitalInk = "19.0.0"
 
 [libraries]
@@ -40,6 +41,7 @@ androidx-ink-geometry = { group = "androidx.ink", name = "ink-geometry", version
 androidx-ink-rendering = { group = "androidx.ink", name = "ink-rendering", version.ref = "ink" }
 androidx-ink-strokes = { group = "androidx.ink", name = "ink-strokes", version.ref = "ink" }
 androidx-ink-storage = { group = "androidx.ink", name = "ink-storage", version.ref = "ink" }
+androidx-input-motionprediction = { group = "androidx.input", name = "input-motionprediction", version.ref = "inputMotionPrediction" }
 
 # Google ML Kit Digital Ink Recognition (Reconhecimento de escrita à mão)
 mlkit-digital-ink = { group = "com.google.mlkit", name = "digital-ink-recognition", version.ref = "mlkitDigitalInk" }

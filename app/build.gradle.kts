@@ -160,6 +160,7 @@ dependencies {
     implementation(libs.androidx.ink.rendering)
     implementation(libs.androidx.ink.strokes)
     implementation(libs.androidx.ink.storage)
+    implementation(libs.androidx.input.motionprediction)
 
     // Google ML Kit Digital Ink Recognition (Reconhecimento de escrita à mão)
     implementation(libs.mlkit.digital.ink)
